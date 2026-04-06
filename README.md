@@ -6,6 +6,7 @@ colorTo: indigo
 sdk: docker
 pinned: false
 license: bsd-3-clause
+app_port: 8000
 ---
 
 # PyTorchSandbox: Agentic Mechanistic Interpretability Benchmark
