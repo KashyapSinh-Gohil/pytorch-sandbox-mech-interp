@@ -1,7 +1,7 @@
 """
 inference.py  PyTorchSandbox Agentic Inference Script
 
-This script drives a Qwen-72B agent through a 3-task Mechanistic Interpretability
+This script drives a DeepSeek-V3 agent through a 3-task Mechanistic Interpretability
 curriculum via the OpenEnv client connected to a deployed HF Space server.
 
 The agent receives observations, writes PyTorch code to inspect model internals,
@@ -22,7 +22,7 @@ from openai import OpenAI
 # --- Configuration ---
 API_KEY = os.getenv("HF_TOKEN", "hf_mock_token")
 API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
-MODEL_NAME = os.getenv("MODEL_NAME", "Qwen/Qwen2.5-72B-Instruct")
+MODEL_NAME = os.getenv("MODEL_NAME", "deepseek-ai/DeepSeek-V3-0324")
 ENV_URL = os.getenv("ENV_URL", "http://localhost:8000")
 TASK_NAME = "mech_interp_curriculum"
 BENCHMARK = "pytorch_sandbox"
