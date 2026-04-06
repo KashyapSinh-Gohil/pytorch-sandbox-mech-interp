@@ -28,6 +28,10 @@ Usage:
     python -m server.app
 """
 
+import json
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+
 try:
     from openenv.core.env_server.http_server import create_app
 except Exception as e:  # pragma: no cover
@@ -51,6 +55,44 @@ app = create_app(
     env_name="mech_interp",
     max_concurrent_envs=1,  # increase this number to allow more concurrent WebSocket sessions
 )
+
+
+class JSONStringParserMiddleware(BaseHTTPMiddleware):
+    """
+    Middleware to parse JSON strings in solution_target field.
+    
+    The Gradio web interface sends solution_target as a JSON string (e.g., "[2, 5, 8]")
+    but the backend expects a list. This middleware intercepts /step requests and
+    converts JSON strings to lists before they reach Pydantic validation.
+    """
+    async def dispatch(self, request: Request, call_next):
+        if request.method == "POST" and request.url.path == "/step":
+            try:
+                body = await request.body()
+                data = json.loads(body.decode("utf-8")) if body else {}
+                
+                # Parse solution_target if it's a string JSON array
+                if isinstance(data.get("action"), dict):
+                    action = data["action"]
+                    if "solution_target" in action and isinstance(action["solution_target"], str):
+                        try:
+                            action["solution_target"] = json.loads(action["solution_target"])
+                        except (json.JSONDecodeError, TypeError):
+                            pass  # Leave as-is if parsing fails
+                
+                # Create new request with modified body
+                async def receive():
+                    return {"type": "http.request", "body": json.dumps(data).encode("utf-8")}
+                
+                request._receive = receive
+            except Exception:
+                pass  # On any error, proceed with original request
+        
+        return await call_next(request)
+
+
+# Add middleware to the app
+app.add_middleware(JSONStringParserMiddleware)
 
 
 def main(host: str = "0.0.0.0", port: int = 8000):
