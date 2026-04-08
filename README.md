@@ -5,6 +5,7 @@ colorFrom: blue
 colorTo: indigo
 sdk: docker
 sdk_version: "0.2.2"
+app_port: 8000
 app_file: server.app:app
 pinned: false
 license: bsd-3-clause
