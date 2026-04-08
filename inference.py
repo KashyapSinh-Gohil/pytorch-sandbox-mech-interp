@@ -15,7 +15,6 @@ import asyncio
 import json
 import os
 import re
-import time
 from typing import List, Optional
 
 from openai import OpenAI
@@ -23,6 +22,7 @@ from openai import OpenAI
 API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
 MODEL_NAME = os.getenv("MODEL_NAME", "deepseek-ai/DeepSeek-V3-0324")
 HF_TOKEN = os.getenv("HF_TOKEN")
+LOCAL_IMAGE_NAME = os.getenv("LOCAL_IMAGE_NAME")
 
 ENV_URL = os.getenv("ENV_URL", "https://kashyapsinh-pytorch-sandbox-mech-interp.hf.space")
 TASK_NAME = "mech_interp_curriculum"
@@ -135,6 +135,9 @@ async def call_llm_with_retry(client: OpenAI, messages: List[dict], model: str) 
 
 
 async def main() -> None:
+    if not HF_TOKEN:
+        raise RuntimeError("HF_TOKEN must be set before running inference.py")
+
     client = OpenAI(base_url=API_BASE_URL, api_key=HF_TOKEN)
 
     try:
@@ -144,8 +147,10 @@ async def main() -> None:
         sys.path.append(os.path.dirname(os.path.abspath(__file__)))
         from client import MechInterpEnv
         from models import MechInterpAction
-    
-    env = MechInterpEnv(base_url=ENV_URL)
+    if LOCAL_IMAGE_NAME:
+        env = await MechInterpEnv.from_docker_image(LOCAL_IMAGE_NAME)
+    else:
+        env = MechInterpEnv(base_url=ENV_URL)
 
     rewards: List[float] = []
     steps_taken = 0
