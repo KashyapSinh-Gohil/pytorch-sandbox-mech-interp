@@ -16,6 +16,8 @@ license: bsd-3-clause
 
 PyTorchSandbox is an OpenEnv environment that evaluates whether an LLM agent can reverse-engineer neural network internals through PyTorch code execution. It presents a **3-task curriculum** of increasing difficulty.
 
+Last updated: 2026-04-08 20:30 UTC - All fixes applied, ready for submission
+
 ---
 
 ## The 3-Task Curriculum
