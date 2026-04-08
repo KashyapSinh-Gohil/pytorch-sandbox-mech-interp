@@ -15,6 +15,7 @@ class TestMechInterpEnvironment(unittest.TestCase):
         obs = self.env.reset()
         self.assertEqual(obs.task_level, 1)
         self.assertIn("Task 1", obs.stdout_or_error)
+        self.assertNotIn(str(self.env.ground_truths["task1"]), obs.stdout_or_error)
         self.assertEqual(obs.reward, 0.0)
         self.assertFalse(obs.done)
 
@@ -38,7 +39,7 @@ class TestMechInterpEnvironment(unittest.TestCase):
         self.assertEqual(obs.task_level, 2)
         self.assertIn("Moving to Task 2", obs.stdout_or_error)
 
-    def test_task2_partial_credit_logic(self):
+    def test_task2_grading_logic(self):
         self.env.reset()
         # Skip to task 2
         self.env.task_level = 2
@@ -48,10 +49,10 @@ class TestMechInterpEnvironment(unittest.TestCase):
         obs = self.env.step(MechInterpAction(solution_target=[7]))
         self.assertEqual(obs.reward, 0.0)
         self.assertEqual(obs.task_level, 2)
-        
-        # Partial credit (correct ID [2], but extra false positives)
+
+        # False positives should not advance the task
         obs = self.env.step(MechInterpAction(solution_target=[2, 5]))
-        self.assertEqual(obs.reward, 0.5)
+        self.assertEqual(obs.reward, 0.0)
         self.assertEqual(obs.task_level, 2)
 
         # Correct guess

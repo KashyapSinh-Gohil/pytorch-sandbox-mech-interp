@@ -5,7 +5,7 @@ colorFrom: blue
 colorTo: indigo
 sdk: docker
 sdk_version: "0.2.2"
-app_file: app.py
+app_file: server.app:app
 pinned: false
 license: bsd-3-clause
 ---
@@ -15,8 +15,6 @@ license: bsd-3-clause
 ## Overview
 
 PyTorchSandbox is an OpenEnv environment that evaluates whether an LLM agent can reverse-engineer neural network internals through PyTorch code execution. It presents a **3-task curriculum** of increasing difficulty.
-
-Last updated: 2026-04-08 20:30 UTC - All fixes applied, ready for submission
 
 ---
 
@@ -37,7 +35,7 @@ Visit: **https://kashyapsinh-pytorch-sandbox-mech-interp.hf.space**
 
 1. Click **Reset** to start a new episode
 2. Enter Python code to inspect the model, OR
-3. Enter Solution Target as JSON array (e.g., `[2, 5, 8]`)
+3. Enter Solution Target as JSON array (e.g., `[i1, i2, i3]`)
 4. Click **Step** to execute
 
 ### Option 2: Python API
@@ -61,7 +59,7 @@ result = await env.reset()
 print(result.observation.stdout_or_error)
 
 # Submit solution
-action = MechInterpAction(solution_target=[0, 3, 7])
+action = MechInterpAction(solution_target=[2, 5, 8])
 result = await env.step(action)
 print(f"Reward: {result.reward}")
 ```
@@ -88,31 +86,38 @@ Configure the inference script with these variables:
 {"python_code": "print(model.layer.weight)"}
 
 # Submit solution:
-{"solution_target": [0, 3, 7]}
+{"solution_target": [2, 5, 8]}
 ```
 
 ---
 
 ## Scoring
 
-- **Task 1**: Exact match of zero-weight indices (reward 0-1)
-- **Task 2**: Correct neuron identification (reward 0-1)  
-- **Task 3**: MSE-based scoring (reward 0-1)
+- **Task 1**: Exact match gives full credit; partial credit is available for partially correct sets
+- **Task 2**: Exact identification of the multiplication neuron
+- **Task 3**: Score is based on mean-squared error against the planted frequencies
 - **Final Score**: Average of all 3 tasks
 
 ---
 
-## Seed System
+## Determinism
 
-Ground truths are randomized based on seed for reproducibility. Set `OPENENV_SEED` environment variable.
+The benchmark uses deterministic model artifacts. `OPENENV_SEED` is surfaced in metadata for reproducibility, but the task answers are derived from the loaded models rather than randomized per reset.
+
+---
+
+## Health Checks
+
+- `GET /health` returns service health
+- `GET /info` returns a non-secret summary of the three tasks
 
 ---
 
 ## Security
 
-- Code execution has 30-second timeout
+- Code execution runs in a separate constrained subprocess with a 30-second timeout
 - Max 30 steps per episode
-- Sandboxed namespace with restricted builtins
+- Restricted builtins are exposed to agent code instead of the full Python builtins
 
 ---
 

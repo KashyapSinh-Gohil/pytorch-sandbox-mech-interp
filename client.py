@@ -10,16 +10,15 @@ from typing import Dict
 
 from openenv.core import EnvClient
 from openenv.core.client_types import StepResult
-from openenv.core.env_server.types import State
 
 try:
-    from .models import MechInterpAction, MechInterpObservation
+    from .models import InterpState, MechInterpAction, MechInterpObservation
 except ImportError:
-    from models import MechInterpAction, MechInterpObservation
+    from models import InterpState, MechInterpAction, MechInterpObservation
 
 
 class MechInterpEnv(
-    EnvClient[MechInterpAction, MechInterpObservation, State]
+    EnvClient[MechInterpAction, MechInterpObservation, InterpState]
 ):
     """
     Client for the PyTorchSandbox Mechanistic Interpretability Environment.
@@ -83,7 +82,7 @@ class MechInterpEnv(
             done=payload.get("done", False),
         )
 
-    def _parse_state(self, payload: Dict) -> State:
+    def _parse_state(self, payload: Dict) -> InterpState:
         """
         Parse server response into State object.
 
@@ -91,9 +90,10 @@ class MechInterpEnv(
             payload: JSON response from state request
 
         Returns:
-            State object with episode_id and step_count
+            State object with episode_id, step_count, and task level
         """
-        return State(
+        return InterpState(
             episode_id=payload.get("episode_id"),
             step_count=payload.get("step_count", 0),
+            task_level=payload.get("task_level", 1),
         )
