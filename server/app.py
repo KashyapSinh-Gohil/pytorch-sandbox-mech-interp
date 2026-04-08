@@ -6,9 +6,7 @@
 
 """
 FastAPI application for the Mech Interp Environment.
-
-This module creates an HTTP server that exposes the MechInterpEnvironment
-over HTTP and WebSocket endpoints, compatible with EnvClient.
+Deployed: 2026-04-08
 """
 
 import os
