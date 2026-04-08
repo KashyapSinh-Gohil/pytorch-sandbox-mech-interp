@@ -6,7 +6,7 @@
 
 """
 FastAPI application for the Mech Interp Environment.
-Deployed: 2026-04-08
+v1.2 - Quick redeploy
 """
 
 import os
