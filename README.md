@@ -1,3 +1,15 @@
+---
+title: PyTorchSandbox Mechanistic Interpretability
+emoji: 🔬
+colorFrom: blue
+colorTo: indigo
+sdk: docker
+sdk_version: "0.2.2"
+app_file: server/app.py
+pinned: false
+license: bsd-3-clause
+---
+
 # 🔬 PyTorchSandbox Mechanistic Interpretability RL Environment
 
 ## Overview
