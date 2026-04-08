@@ -106,7 +106,7 @@ def build_custom_gradio_ui(
         "openai/gpt-4o",
     ]
     
-    with gr.Blocks(title=title, theme=gr.themes.Soft()) as demo:
+    with gr.Blocks(title=title) as demo:
         gr.Markdown(f"# 🔬 {title}")
         gr.Markdown("""
         ## Mechanistic Interpretability RL Environment
