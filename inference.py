@@ -23,7 +23,7 @@ from openai import OpenAI
 API_KEY = os.getenv("HF_TOKEN", "hf_mock_token")
 API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
 MODEL_NAME = os.getenv("MODEL_NAME", "deepseek-ai/DeepSeek-V3-0324")
-ENV_URL = os.getenv("ENV_URL", "http://localhost:8000")
+ENV_URL = os.getenv("ENV_URL", "https://kashyapsinh-pytorch-sandbox-mech-interp.hf.space")
 TASK_NAME = "mech_interp_curriculum"
 BENCHMARK = "pytorch_sandbox"
 MAX_STEPS = 30  # Hard ceiling  must finish within 20 min on 2vCPU/8GB

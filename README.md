@@ -4,9 +4,9 @@ emoji: 🔬
 colorFrom: blue
 colorTo: indigo
 sdk: docker
+app_port: 8000
 pinned: false
 license: bsd-3-clause
-app_port: 8000
 ---
 
 # PyTorchSandbox: Agentic Mechanistic Interpretability Benchmark
@@ -50,8 +50,8 @@ Inspired by mechanistic analysis of algorithmic tasks, the agent must analyze a 
          (Agentic LLM Evaluation Loop)           
                                                   
         
-    OpenAI     HF Inference Router       
-    Client     (Qwen/Qwen2.5-72B)       
+            OpenAI     HF Inference Router       
+     Client     (DeepSeek-V3-0324)
         
                                                  
                                                  
