@@ -15,21 +15,24 @@ import asyncio
 import json
 import os
 import re
+import time
 from typing import List, Optional
 
 from openai import OpenAI
 
-# --- Configuration ---
-API_KEY = os.getenv("HF_TOKEN", "hf_mock_token")
 API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
 MODEL_NAME = os.getenv("MODEL_NAME", "deepseek-ai/DeepSeek-V3-0324")
+HF_TOKEN = os.getenv("HF_TOKEN")
+
 ENV_URL = os.getenv("ENV_URL", "https://kashyapsinh-pytorch-sandbox-mech-interp.hf.space")
 TASK_NAME = "mech_interp_curriculum"
 BENCHMARK = "pytorch_sandbox"
-MAX_STEPS = 30  # Hard ceiling  must finish within 20 min on 2vCPU/8GB
+MAX_STEPS = 30
+
+MAX_RETRIES = 3
+RETRY_DELAY = 2
 
 
-# --- Logging Helpers ---
 def log_start(task: str, env: str, model: str) -> None:
     print(f"[START] task={task} env={env} model={model}", flush=True)
 
@@ -45,7 +48,6 @@ def log_end(success: bool, steps: int, score: float, rewards: List[float]) -> No
     print(f"[END] success={str(success).lower()} steps={steps} score={score:.3f} rewards={rewards_str}", flush=True)
 
 
-# --- System Prompt ---
 SYSTEM_PROMPT = """You are an expert AI Safety researcher specializing in Mechanistic Interpretability of neural networks. You are interacting with a PyTorch sandbox environment that presents you with a 3-task curriculum.
 
 ## Your Tools
@@ -70,7 +72,7 @@ Submit as: {"solution_target": [i1, i2, ...]}  (sorted ascending)
 ### Task 2 (Medium)  Causal Ablation
 The model computes y = (x1 * x2) + x3 through a 2-layer MLP with 10 hidden neurons.
 One hidden neuron is the "multiplication neuron"  ablating it destroys the multiplicative component.
-Use forward hooks on model.hidden to zero out each hidden neuron one at a time, measure the output change on test inputs, and identify which neuron index causes the largest error increase.
+Use forward hooks on model.hidden to zero out each hidden neurons one at a time, measure the output change on test inputs, and identify which neuron index causes the largest error increase.
 Submit as: {"solution_target": [neuron_index]}
 
 ### Task 3 (Hard)  Fourier Analysis of Planted Features
@@ -88,22 +90,18 @@ Submit as: {"solution_target": [f1, f2, f3, f4, f5]}  (sorted ascending)
 """
 
 
-# --- JSON Extraction ---
 def extract_json(text: str) -> Optional[dict]:
     """Robustly extract a JSON object from LLM output, handling markdown fences."""
     text = text.strip()
-    # Strip markdown code fences if present
     text = re.sub(r'^```(?:json)?\s*', '', text)
     text = re.sub(r'\s*```$', '', text)
     text = text.strip()
 
-    # Try direct parse first
     try:
         return json.loads(text)
     except json.JSONDecodeError:
         pass
 
-    # Try to find a JSON object in the text
     match = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', text)
     if match:
         try:
@@ -114,18 +112,39 @@ def extract_json(text: str) -> Optional[dict]:
     return None
 
 
-# --- Main Agent Loop ---
-async def main() -> None:
-    llm_client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
+async def call_llm_with_retry(client: OpenAI, messages: List[dict], model: str) -> str:
+    """Call LLM with exponential backoff retry logic."""
+    last_error = None
+    
+    for attempt in range(MAX_RETRIES):
+        try:
+            response = client.chat.completions.create(
+                model=model,
+                messages=messages,
+                temperature=0.1,
+                max_tokens=2048,
+            )
+            return response.choices[0].message.content.strip()
+        except Exception as e:
+            last_error = e
+            if attempt < MAX_RETRIES - 1:
+                wait_time = RETRY_DELAY * (2 ** attempt)
+                await asyncio.sleep(wait_time)
+    
+    raise last_error
 
-    # Import the OpenEnv client  works both as installed package and locally
+
+async def main() -> None:
+    client = OpenAI(base_url=API_BASE_URL, api_key=HF_TOKEN)
+
     try:
-        from mech_interp import MechInterpEnv, MechInterpAction
+        from mech_interp import MechInterpAction, MechInterpEnv
     except ModuleNotFoundError:
         import sys
         sys.path.append(os.path.dirname(os.path.abspath(__file__)))
         from client import MechInterpEnv
         from models import MechInterpAction
+    
     env = MechInterpEnv(base_url=ENV_URL)
 
     rewards: List[float] = []
@@ -136,14 +155,12 @@ async def main() -> None:
 
     log_start(task=TASK_NAME, env=BENCHMARK, model=MODEL_NAME)
 
-    # Conversation history for multi-turn reasoning
     messages = [{"role": "system", "content": SYSTEM_PROMPT}]
 
     try:
         result = await env.reset()
         obs = result.observation
 
-        # Seed the conversation with the initial observation
         messages.append({
             "role": "user",
             "content": (
@@ -157,27 +174,18 @@ async def main() -> None:
             if obs.done:
                 break
 
-            # --- Call the LLM ---
             try:
-                response = llm_client.chat.completions.create(
-                    model=MODEL_NAME,
-                    messages=messages,
-                    temperature=0.1,
-                    max_tokens=2048,
-                )
-                llm_output = response.choices[0].message.content.strip()
+                llm_output = await call_llm_with_retry(client, messages, MODEL_NAME)
             except Exception as e:
-                error_msg = f"LLM API error: {e}"
+                error_msg = f"LLM API error after {MAX_RETRIES} retries: {e}"
                 log_step(step, "api_error", 0.0, False, error_msg)
                 rewards.append(0.0)
                 steps_taken = step
                 break
 
-            # --- Parse the LLM's JSON into an Action ---
             parsed = extract_json(llm_output)
 
             if parsed is None:
-                # LLM hallucinated non-JSON  feed error back and retry
                 action = MechInterpAction(python_code="print('LLM returned invalid JSON')")
                 action_label = "parse_error_retry"
                 messages.append({"role": "assistant", "content": llm_output})
@@ -202,7 +210,6 @@ async def main() -> None:
                         "content": f"ERROR: JSON schema mismatch: {e}. Use keys 'python_code' (str) or 'solution_target' (list of ints)."
                     })
 
-            # --- Step the environment via the OpenEnv client ---
             prev_task = obs.task_level
             result = await env.step(action)
             obs = result.observation
@@ -212,11 +219,9 @@ async def main() -> None:
 
             log_step(step, action_label, reward, obs.done, None)
 
-            # Track per-task scores (only on submissions)
             if action.solution_target is not None and reward > task_scores.get(prev_task, 0.0):
                 task_scores[prev_task] = reward
 
-            # --- Feed observation back to LLM for next turn ---
             if parsed is not None and action_label not in ("parse_error_retry", "schema_error_retry"):
                 messages.append({"role": "assistant", "content": llm_output})
 
@@ -234,12 +239,9 @@ async def main() -> None:
                     )
                 })
 
-            # --- Trim conversation to avoid context overflow ---
-            # Keep system prompt + last 20 messages
             if len(messages) > 22:
                 messages = [messages[0]] + messages[-20:]
 
-        # --- Compute final score ---
         score = sum(task_scores.values()) / 3.0
         success = score > 0.9
 
