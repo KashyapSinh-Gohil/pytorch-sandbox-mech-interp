@@ -41,28 +41,30 @@ Visit: **https://kashyapsinh-pytorch-sandbox-mech-interp.hf.space**
 
 ### Option 2: Python API
 ```python
+import asyncio
+import os
+
 from openai import OpenAI
 from mech_interp import MechInterpAction, MechInterpEnv
-import asyncio
 
-# Configure
-client = OpenAI(
-    base_url="https://router.huggingface.co/v1",
-    api_key=os.getenv("HF_TOKEN")
-)
-MODEL_NAME = "deepseek-ai/DeepSeek-V3-0324"  # Or any HF model
+async def main() -> None:
+    client = OpenAI(
+        base_url="https://router.huggingface.co/v1",
+        api_key=os.getenv("HF_TOKEN"),
+    )
+    model_name = "deepseek-ai/DeepSeek-V3-0324"
 
-# Connect to environment
-env = MechInterpEnv(base_url="https://kashyapsinh-pytorch-sandbox-mech-interp.hf.space")
+    async with MechInterpEnv(
+        base_url="https://kashyapsinh-pytorch-sandbox-mech-interp.hf.space"
+    ) as env:
+        result = await env.reset()
+        print(result.observation.stdout_or_error)
 
-# Run episode
-result = await env.reset()
-print(result.observation.stdout_or_error)
+        action = MechInterpAction(solution_target=[2, 5, 8])
+        result = await env.step(action)
+        print(f"Reward: {result.reward}")
 
-# Submit solution
-action = MechInterpAction(solution_target=[2, 5, 8])
-result = await env.step(action)
-print(f"Reward: {result.reward}")
+asyncio.run(main())
 ```
 
 ---
@@ -77,6 +79,7 @@ Configure the inference script with these variables:
 | `API_BASE_URL` | LLM API endpoint | `https://router.huggingface.co/v1` |
 | `MODEL_NAME` | Model to use for inference | `deepseek-ai/DeepSeek-V3-0324` |
 | `ENV_URL` | Environment server URL | Space URL |
+| `LOCAL_IMAGE_NAME` | Optional local Docker image for `from_docker_image()` runs | Unset |
 
 ---
 
