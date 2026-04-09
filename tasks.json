@@ -8,6 +8,9 @@
       "level": 1,
       "name": "Dead Neuron Detection",
       "has_grader": true,
+      "reset_payload": {
+        "task_id": "task1"
+      },
       "grader": {
         "name": "dead_neuron_detection_grader",
         "module": "tasks.task1.grader",
@@ -23,6 +26,9 @@
       "level": 2,
       "name": "Causal Ablation",
       "has_grader": true,
+      "reset_payload": {
+        "task_id": "task2"
+      },
       "grader": {
         "name": "causal_ablation_grader",
         "module": "tasks.task2.grader",
@@ -38,6 +44,9 @@
       "level": 3,
       "name": "Fourier Analysis",
       "has_grader": true,
+      "reset_payload": {
+        "task_id": "task3"
+      },
       "grader": {
         "name": "fourier_frequency_recovery_grader",
         "module": "tasks.task3.grader",

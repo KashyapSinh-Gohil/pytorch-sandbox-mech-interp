@@ -82,6 +82,18 @@ class TestMechInterpEnvironment(unittest.TestCase):
             self.assertGreater(rubric.last_score, 0.0)
             self.assertLess(rubric.last_score, 1.0)
 
+    def test_reset_can_start_directly_at_task2(self):
+        obs = self.env.reset(task_id="task2")
+        self.assertEqual(obs.task_level, 2)
+        self.assertIn("Task 2", obs.stdout_or_error)
+        self.assertEqual(obs.metadata["task_id"], "task2")
+
+    def test_reset_can_start_directly_at_task3(self):
+        obs = self.env.reset(task_level=3)
+        self.assertEqual(obs.task_level, 3)
+        self.assertIn("Task 3", obs.stdout_or_error)
+        self.assertEqual(obs.metadata["task_id"], "task3")
+
     def test_solution_attempt_updates_matching_child_rubric(self):
         self.env.reset()
         obs = self.env.step(MechInterpAction(solution_target=[2, 5, 8]))

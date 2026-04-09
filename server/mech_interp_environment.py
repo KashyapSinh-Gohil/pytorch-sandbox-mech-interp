@@ -139,6 +139,21 @@ TASK_SPECS = {
     },
 }
 
+TASK_ALIASES = {
+    "task1": "task1",
+    "1": "task1",
+    "dead_neuron_detection": "task1",
+    "dead neuron detection": "task1",
+    "task2": "task2",
+    "2": "task2",
+    "causal_ablation": "task2",
+    "causal ablation": "task2",
+    "task3": "task3",
+    "3": "task3",
+    "fourier_analysis": "task3",
+    "fourier analysis": "task3",
+}
+
 EXEC_RUNNER = """
 import base64
 import contextlib
@@ -394,6 +409,23 @@ def _task_key_for_level(task_level: int) -> str:
     return f"task{task_level}"
 
 
+def _resolve_task_key(task_id: Any = None, task_level: Any = None) -> str:
+    """Resolve a task selection from reset kwargs into a stable task key."""
+    if task_id is not None:
+        normalized = str(task_id).strip().lower()
+        resolved = TASK_ALIASES.get(normalized)
+        if resolved is not None:
+            return resolved
+
+    if task_level is not None:
+        normalized = str(task_level).strip().lower()
+        resolved = TASK_ALIASES.get(normalized)
+        if resolved is not None:
+            return resolved
+
+    return "task1"
+
+
 def _task_metadata(task_level: int) -> dict[str, Any]:
     spec = TASK_SPECS[_task_key_for_level(task_level)]
     return {
@@ -413,6 +445,7 @@ def get_task_catalog() -> list[dict[str, Any]]:
             "name": spec["name"],
             "description": spec["description"],
             "has_grader": True,
+            "reset_payload": {"task_id": spec["id"]},
             "grader": {
                 "name": spec["grader_name"],
                 "module": spec["grader_module"],
@@ -429,6 +462,35 @@ def _read_readme(base_dir: str) -> Optional[str]:
     if not readme_path.exists():
         return None
     return readme_path.read_text(encoding="utf-8")
+
+
+def _build_reset_prompt(task_key: str, seed: int) -> str:
+    """Return a task-specific reset prompt so validators can enter tasks directly."""
+    if task_key == "task2":
+        return (
+            f"PyTorchSandbox environment ready. (Seed: {seed})\n"
+            "Task 2: Causal Ablation.\n"
+            "The model computes y = (x1*x2) + x3 through a hidden layer available via `model.hidden`.\n"
+            "Use forward hooks to ablate hidden neurons, then submit "
+            '{"solution_target": [neuron_index]}.'
+        )
+
+    if task_key == "task3":
+        return (
+            f"PyTorchSandbox environment ready. (Seed: {seed})\n"
+            "Task 3: Fourier Analysis.\n"
+            "Analyze `model.W_E.weight` across the 97 token positions and recover the 5 planted frequencies.\n"
+            "Submit them as a sorted JSON list like "
+            '{"solution_target": [f1, f2, f3, f4, f5]}.'
+        )
+
+    return (
+        f"PyTorchSandbox environment ready. (Seed: {seed})\n"
+        "Task 1: Dead Neuron Detection.\n"
+        "Find all zero-weight input indices in the Linear(10,1) model available as `model`.\n"
+        "Use print() to inspect the weights, then submit a sorted JSON list of indices as "
+        '{"solution_target": [i1, i2, i3]}.'
+    )
 
 
 class Task1Rubric(Rubric):
@@ -530,22 +592,26 @@ class MechInterpEnvironment(Environment):
         if seed is not None:
             self.seed = _coerce_seed(seed)
 
+        task_key = _resolve_task_key(
+            task_id=kwargs.get("task_id"),
+            task_level=kwargs.get("task_level"),
+        )
+        task_spec = TASK_SPECS[task_key]
+
         self._reset_rubric()
-        self._state = InterpState(episode_id=episode_id or str(uuid4()), step_count=0, task_level=1)
-        self.task_level = 1
+        self._state = InterpState(
+            episode_id=episode_id or str(uuid4()),
+            step_count=0,
+            task_level=task_spec["level"],
+        )
+        self.task_level = task_spec["level"]
 
         return MechInterpObservation(
-            stdout_or_error=(
-                f"PyTorchSandbox environment ready. (Seed: {self.seed})\n"
-                "Task 1: Dead Neuron Detection.\n"
-                "Find all zero-weight input indices in the Linear(10,1) model available as `model`.\n"
-                "Use print() to inspect the weights, then submit a sorted JSON list of indices as "
-                '{"solution_target": [i1, i2, i3]}.'
-            ),
-            task_level=1,
+            stdout_or_error=_build_reset_prompt(task_key, self.seed),
+            task_level=task_spec["level"],
             done=False,
             reward=MIN_TASK_SCORE,
-            metadata={**_task_metadata(1), "seed": self.seed, "step": 0},
+            metadata={**_task_metadata(task_spec["level"]), "seed": self.seed, "step": 0},
         )
 
     def step(self, action: MechInterpAction) -> MechInterpObservation:

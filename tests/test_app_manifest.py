@@ -37,6 +37,8 @@ class TestAppManifest(unittest.TestCase):
                 "fourier_frequency_recovery_grader",
             ],
         )
+        reset_payloads = [task["reset_payload"]["task_id"] for task in payload["tasks"]]
+        self.assertEqual(reset_payloads, ["task1", "task2", "task3"])
 
     def test_metadata_mentions_three_graded_tasks(self):
         response = self.client.get("/metadata")
@@ -91,6 +93,10 @@ class TestAppManifest(unittest.TestCase):
         self.assertEqual(manifest["grader_count"], 3)
         self.assertEqual(len(manifest["tasks"]), 3)
         self.assertTrue(all(task["has_grader"] for task in manifest["tasks"]))
+        self.assertEqual(
+            [task["reset_payload"]["task_id"] for task in manifest["tasks"]],
+            ["task1", "task2", "task3"],
+        )
 
 
 if __name__ == "__main__":
