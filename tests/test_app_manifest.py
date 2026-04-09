@@ -50,7 +50,10 @@ class TestAppManifest(unittest.TestCase):
             manifest = yaml.safe_load(handle)
 
         self.assertEqual(len(manifest["tasks"]), 3)
-        grader_paths = [task["grader"] for task in manifest["tasks"]]
+        grader_paths = [
+            f"{task['grader']['module']}:{task['grader']['function']}"
+            for task in manifest["tasks"]
+        ]
         self.assertEqual(
             grader_paths,
             [
@@ -59,6 +62,8 @@ class TestAppManifest(unittest.TestCase):
                 "tasks.task3.grader:grade",
             ],
         )
+        self.assertEqual(manifest["grader"]["module"], "tasks.graders")
+        self.assertEqual(manifest["grader"]["function"], "grade_task")
 
     def test_manifest_grader_entrypoints_are_importable(self):
         manifest_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "openenv.yaml")
@@ -66,10 +71,15 @@ class TestAppManifest(unittest.TestCase):
             manifest = yaml.safe_load(handle)
 
         for task in manifest["tasks"]:
-            module_name, func_name = task["grader"].split(":")
+            module_name = task["grader"]["module"]
+            func_name = task["grader"]["function"]
             module = importlib.import_module(module_name)
             grader = getattr(module, func_name)
             self.assertTrue(callable(grader))
+
+        top_module = importlib.import_module(manifest["grader"]["module"])
+        top_grader = getattr(top_module, manifest["grader"]["function"])
+        self.assertTrue(callable(top_grader))
 
 
 if __name__ == "__main__":
