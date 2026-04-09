@@ -98,13 +98,46 @@ For hackathon submissions, do not override the injected `API_BASE_URL` / `API_KE
 
 ---
 
+## Action And Observation Spaces
+
+```python
+class MechInterpAction(Action):
+    python_code: Optional[str]
+    solution_target: Optional[List[Any]]
+
+class MechInterpObservation(Observation):
+    stdout_or_error: str
+    task_level: int
+    done: bool
+    reward: float
+```
+
+- `python_code` executes sandboxed inspection code against the current task model.
+- `solution_target` submits the final integer answer list for grading.
+- `stdout_or_error` returns captured stdout/stderr or grader feedback.
+- `task_level` tracks progression through the 3-task curriculum.
+
+---
+
 ## Scoring
 
 - **Task 1**: Exact match gives full credit; partial credit is available for partially correct sets
-- **Task 2**: Exact identification of the multiplication neuron
+- **Task 2**: Exact identification gives full credit; including the correct neuron in a longer list earns partial credit
 - **Task 3**: Score is based on mean-squared error against the planted frequencies
 - **Validator-facing task scores**: Each task's grader reports a score strictly inside `(0, 1)` for compatibility with Phase 2 validation
 - **Final Score**: Average of all 3 tasks
+
+---
+
+## Baseline Reproduction
+
+Run the provided baseline agent with:
+
+```bash
+python inference.py
+```
+
+The script emits the required `[START]`, `[STEP]`, and `[END]` lines and reports a final score in `[0, 1]`. Record the exact score from your target deployment before final submission so the README and submission notes reflect the same environment build.
 
 ---
 

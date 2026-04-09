@@ -6,10 +6,30 @@
 
 """Mech Interp Environment Client."""
 
-from typing import Dict
+from dataclasses import dataclass
+from typing import Any, Dict, Generic, TypeVar
 
-from openenv.core import EnvClient
-from openenv.core.client_types import StepResult
+try:
+    from openenv.core import EnvClient
+except Exception:
+    ActionT = TypeVar("ActionT")
+    ObservationT = TypeVar("ObservationT")
+    StateT = TypeVar("StateT")
+
+    class EnvClient(Generic[ActionT, ObservationT, StateT]):  # type: ignore[override]
+        pass
+
+try:
+    from openenv.core.client_types import StepResult
+except Exception:
+    ObservationResultT = TypeVar("ObservationResultT")
+
+    @dataclass
+    class StepResult(Generic[ObservationResultT]):  # type: ignore[override]
+        observation: ObservationResultT
+        reward: float | None = None
+        done: bool = False
+        info: Dict[str, Any] | None = None
 
 try:
     from .models import InterpState, MechInterpAction, MechInterpObservation

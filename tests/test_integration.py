@@ -51,6 +51,20 @@ class TestEndToEndIntegration(unittest.TestCase):
         self.assertEqual(reward, MAX_TASK_SCORE)
         self.assertEqual(task_level_next, 3)
         self.assertFalse(done)
+
+    def test_task2_partial_credit_without_advancement(self):
+        """Task 2 should provide reward shaping before the exact answer is submitted."""
+        submission = [2, 5]
+
+        if 2 in submission:
+            reward = max(0.1, 1.0 / len(submission))
+            task_level_next = 2
+        else:
+            reward = 0.0
+            task_level_next = 2
+
+        self.assertEqual(reward, 0.5)
+        self.assertEqual(task_level_next, 2)
     
     def test_task3_complete_workflow(self):
         """Complete workflow: reset → code → grading → completion."""

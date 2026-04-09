@@ -1,6 +1,6 @@
 version: "1.0"
 spec_version: 1
-openenv_version: "0.2.0"
+openenv_version: "0.2.2"
 name: mech_interp
 description: PyTorchSandbox mechanistic interpretability benchmark with three graded tasks.
 type: space

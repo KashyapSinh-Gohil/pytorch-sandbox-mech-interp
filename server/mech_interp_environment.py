@@ -4,15 +4,64 @@ import os
 import subprocess
 import sys
 import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 from uuid import uuid4
 from typing import Any, Callable, Optional
 
 import torch
 import torch.nn as nn
-from openenv.core.env_server.interfaces import Environment
-from openenv.core.env_server.types import EnvironmentMetadata
-from openenv.core.rubrics import Rubric
+
+try:
+    from openenv.core.env_server.interfaces import Environment
+except Exception:
+    class Environment:  # type: ignore[override]
+        def __init__(self, rubric: Optional["Rubric"] = None):
+            self.rubric = rubric
+
+        def _apply_rubric(self, action: Any, observation: Any) -> Optional[float]:
+            if self.rubric is None:
+                return None
+            return self.rubric(action, observation)
+
+        def _reset_rubric(self) -> None:
+            if self.rubric is not None and hasattr(self.rubric, "reset"):
+                self.rubric.reset()
+
+try:
+    from openenv.core.env_server.types import EnvironmentMetadata
+except Exception:
+    @dataclass
+    class EnvironmentMetadata:  # type: ignore[override]
+        name: str
+        description: str
+        readme_content: Optional[str] = None
+        version: str = "0.1.0"
+        author: Optional[str] = None
+        documentation_url: Optional[str] = None
+
+try:
+    from openenv.core.rubrics import Rubric
+except Exception:
+    class Rubric:  # type: ignore[override]
+        def __init__(self) -> None:
+            self.last_score = 0.5
+
+        def forward(self, action: Any, observation: Any) -> float:
+            raise NotImplementedError
+
+        def __call__(self, action: Any, observation: Any) -> float:
+            score = float(self.forward(action, observation))
+            self.last_score = score
+            return score
+
+        def named_children(self):
+            for name, value in self.__dict__.items():
+                if isinstance(value, Rubric):
+                    yield name, value
+
+        def named_rubrics(self):
+            return self.named_children()
 
 from . import model_architectures
 
@@ -131,13 +180,18 @@ model_path = sys.argv[1]
 encoded_code = sys.argv[2]
 code = base64.b64decode(encoded_code.encode("ascii")).decode("utf-8")
 model = torch.load(model_path, weights_only=False)
-safe_globals = {"__builtins__": SAFE_BUILTINS}
-safe_locals = {"model": model, "torch": torch, "nn": nn, "math": math}
+namespace = {
+    "__builtins__": SAFE_BUILTINS,
+    "model": model,
+    "torch": torch,
+    "nn": nn,
+    "math": math,
+}
 
 with contextlib.redirect_stdout(buffer), contextlib.redirect_stderr(buffer):
     try:
         compiled_code = compile(code, "<agent_code>", "exec")
-        exec(compiled_code, safe_globals, safe_locals)
+        exec(compiled_code, namespace, namespace)
     except Exception:
         traceback.print_exc(file=buffer)
 
@@ -309,7 +363,11 @@ def _score_task1_raw(submission: list[int], ground_truth: list[int]) -> float:
 
 
 def _score_task2_raw(submission: list[int], ground_truth: list[int]) -> float:
-    return 1.0 if submission == ground_truth else 0.0
+    if submission == ground_truth:
+        return 1.0
+    if ground_truth[0] in submission:
+        return max(0.1, 1.0 / len(submission))
+    return 0.0
 
 
 def _task3_mse(submission: list[int], ground_truth: list[int]) -> Optional[float]:
@@ -597,8 +655,9 @@ class MechInterpEnvironment(Environment):
 
         if self.task_level == 2:
             gt = self.ground_truths["task2"]
+            raw_reward = _score_task2_raw(submission, gt)
+            reward = _clamp_task_score(raw_reward)
             if submission == gt:
-                reward = MAX_TASK_SCORE
                 self.task_level = 3
                 self._state.task_level = 3
                 message = (
@@ -607,8 +666,13 @@ class MechInterpEnvironment(Environment):
                     "Analyze model.W_E.weight across the 97 token positions and submit the 5 dominant "
                     "frequency indices as {\"solution_target\": [f1, f2, f3, f4, f5]}."
                 )
+            elif gt[0] in submission:
+                message = (
+                    f"Task 2 graded. Partial credit: {reward:.2f}\n"
+                    "You found the correct multiplication neuron but included extra candidates. "
+                    "Submit just the single hidden-neuron index for full credit and advancement."
+                )
             else:
-                reward = MIN_TASK_SCORE
                 message = (
                     f"Task 2 incorrect. Score: {reward:.2f}\n"
                     "Submit the single hidden-neuron index responsible for the multiplicative circuit."

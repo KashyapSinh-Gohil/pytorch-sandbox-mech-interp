@@ -6,9 +6,13 @@
 
 """Mech Interp Environment."""
 
-from .client import MechInterpEnv
 from .models import MechInterpAction, MechInterpObservation
 from .server import MechInterpEnvironment
+
+try:
+    from .client import MechInterpEnv
+except Exception:
+    MechInterpEnv = None
 
 __all__ = [
     "MechInterpAction",

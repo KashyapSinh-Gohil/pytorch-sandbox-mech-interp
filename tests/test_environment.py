@@ -51,9 +51,10 @@ class TestMechInterpEnvironment(unittest.TestCase):
         self.assertEqual(obs.reward, MIN_TASK_SCORE)
         self.assertEqual(obs.task_level, 2)
 
-        # False positives should not advance the task
+        # Correct neuron with false positives should earn partial credit but not advance
         obs = self.env.step(MechInterpAction(solution_target=[2, 5]))
-        self.assertEqual(obs.reward, MIN_TASK_SCORE)
+        self.assertGreater(obs.reward, MIN_TASK_SCORE)
+        self.assertLess(obs.reward, MAX_TASK_SCORE)
         self.assertEqual(obs.task_level, 2)
 
         # Correct guess

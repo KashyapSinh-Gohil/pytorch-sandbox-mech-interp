@@ -38,11 +38,23 @@ class JSONStringParserMiddleware(BaseHTTPMiddleware):
                 body = await request.body()
                 data = json.loads(body.decode("utf-8")) if body else {}
 
-                if isinstance(data.get("action"), dict):
-                    action = data["action"]
+                candidate_actions = []
+                if isinstance(data, dict):
+                    candidate_actions.append(data)
+                    if isinstance(data.get("action"), dict):
+                        candidate_actions.append(data["action"])
+
+                for action in candidate_actions:
                     if "solution_target" in action and isinstance(action["solution_target"], str):
                         try:
-                            action["solution_target"] = json.loads(action["solution_target"])
+                            parsed = json.loads(action["solution_target"])
+                            if isinstance(parsed, list):
+                                action["solution_target"] = parsed
+                            else:
+                                logger.warning(
+                                    "solution_target parsed to %s, expected list",
+                                    type(parsed).__name__,
+                                )
                         except (json.JSONDecodeError, TypeError) as exc:
                             logger.warning("Failed to parse solution_target JSON string: %s", exc)
 
