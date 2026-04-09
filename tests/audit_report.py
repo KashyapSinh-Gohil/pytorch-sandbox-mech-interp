@@ -288,9 +288,10 @@ def audit_inference_script(report):
         content = f.read()
     
     checks = {
-        "HF_TOKEN": "Uses HuggingFace token",
-        "api_base": "Sets API base URL",
-        "Qwen": "Uses Qwen model",
+        "API_KEY": "Uses validator API key",
+        "HF_TOKEN": "Keeps local HuggingFace fallback",
+        "API_BASE_URL": "Sets API base URL",
+        "deepseek-ai/DeepSeek-V3-0324": "Uses configured model",
         "MechInterpEnvironmentClient": "Uses correct client",
         "client.reset()": "Calls reset",
         "client.step()": "Calls step",

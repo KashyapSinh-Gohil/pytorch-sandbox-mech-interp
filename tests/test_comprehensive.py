@@ -455,10 +455,18 @@ class TestModelArchitectures(unittest.TestCase):
 class TestInferenceScriptSetup(unittest.TestCase):
     """Test inference script configuration."""
     
-    def test_inference_uses_hf_token(self):
-        """Inference should use HF token, not OpenAI key."""
-        # This would be checked in the actual inference.py
-        pass
+    def test_inference_prefers_validator_api_key(self):
+        """Inference should use the validator API key before local fallbacks."""
+        inference_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            "inference.py",
+        )
+        with open(inference_path, encoding="utf-8") as inference_file:
+            content = inference_file.read()
+
+        self.assertIn('API_KEY = os.getenv("API_KEY")', content)
+        self.assertIn("return API_KEY or HF_TOKEN", content)
+        self.assertIn("client = OpenAI(base_url=API_BASE_URL, api_key=api_key)", content)
     
     def test_inference_api_router_configured(self):
         """Inference should use HF router for API calls."""
