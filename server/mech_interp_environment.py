@@ -5,11 +5,69 @@ import subprocess
 import sys
 import tempfile
 from uuid import uuid4
-from typing import Callable, Optional
+from pathlib import Path
+from typing import Any, Callable, Optional
 
 import torch
 import torch.nn as nn
 from openenv.core.env_server.interfaces import Environment
+
+try:
+    from openenv.core.env_server.types import EnvironmentMetadata as _OpenEnvEnvironmentMetadata
+except Exception:
+    _OpenEnvEnvironmentMetadata = None
+
+if not isinstance(_OpenEnvEnvironmentMetadata, type):
+    class EnvironmentMetadata:  # type: ignore[override]
+        def __init__(
+            self,
+            name: str,
+            description: str,
+            readme_content: Optional[str] = None,
+            version: Optional[str] = None,
+            author: Optional[str] = None,
+            documentation_url: Optional[str] = None,
+        ):
+            self.name = name
+            self.description = description
+            self.readme_content = readme_content
+            self.version = version
+            self.author = author
+            self.documentation_url = documentation_url
+else:
+    EnvironmentMetadata = _OpenEnvEnvironmentMetadata
+
+try:
+    from openenv.core.rubrics import Rubric as _OpenEnvRubric
+except Exception:
+    _OpenEnvRubric = None
+
+if not isinstance(_OpenEnvRubric, type):
+    class Rubric:
+        def __init__(self):
+            self._rubric_children: dict[str, "Rubric"] = {}
+            self.last_score: Optional[float] = None
+
+        def __setattr__(self, name: str, value: Any) -> None:
+            if name not in {"_rubric_children", "last_score"} and isinstance(value, Rubric):
+                self._rubric_children[name] = value
+            object.__setattr__(self, name, value)
+
+        def __call__(self, action: Any, observation: Any) -> float:
+            result = self.forward(action, observation)
+            self.last_score = result
+            return result
+
+        def forward(self, action: Any, observation: Any) -> float:
+            raise NotImplementedError
+
+        def named_rubrics(self, prefix: str = ""):
+            for name, child in self._rubric_children.items():
+                full_name = f"{prefix}.{name}" if prefix else name
+                yield full_name, child
+                yield from child.named_rubrics(full_name)
+else:
+    Rubric = _OpenEnvRubric
 
 from . import model_architectures
 
@@ -53,6 +111,39 @@ SAFE_BUILTINS = {
     "tuple": tuple,
     "type": type,
     "zip": zip,
+}
+
+TASK_SPECS = {
+    "task1": {
+        "id": "task1",
+        "level": 1,
+        "name": "Dead Neuron Detection",
+        "description": "Find every zero-weight input feature in the Linear(10,1) model.",
+        "grader_name": "dead_neuron_detection_grader",
+        "grader_type": "python",
+        "success_criteria": "Submit the exact sorted set of dead-neuron indices.",
+        "partial_credit": True,
+    },
+    "task2": {
+        "id": "task2",
+        "level": 2,
+        "name": "Causal Ablation",
+        "description": "Identify the hidden neuron that implements the multiplicative circuit.",
+        "grader_name": "causal_ablation_grader",
+        "grader_type": "python",
+        "success_criteria": "Submit the single hidden-neuron index that carries x1*x2.",
+        "partial_credit": False,
+    },
+    "task3": {
+        "id": "task3",
+        "level": 3,
+        "name": "Fourier Analysis",
+        "description": "Recover the five planted frequencies from the embedding spectrum.",
+        "grader_name": "fourier_frequency_recovery_grader",
+        "grader_type": "python",
+        "success_criteria": "Submit the exact sorted list of five dominant planted frequencies.",
+        "partial_credit": True,
+    },
 }
 
 EXEC_RUNNER = """
@@ -262,10 +353,141 @@ def _normalize_submission(raw_submission: object) -> tuple[Optional[list[int]], 
     return normalized, None
 
 
+def _score_task1(submission: list[int], ground_truth: list[int]) -> float:
+    gt_set = set(ground_truth)
+    submission_set = set(submission)
+    matches = len(submission_set & gt_set)
+    false_positives = len(submission_set - gt_set)
+
+    if submission == ground_truth:
+        return 1.0
+
+    return round(max(0.0, (matches / len(ground_truth)) * 0.33 - (false_positives * 0.1)), 2)
+
+
+def _score_task2(submission: list[int], ground_truth: list[int]) -> float:
+    return 1.0 if submission == ground_truth else 0.0
+
+
+def _task3_mse(submission: list[int], ground_truth: list[int]) -> Optional[float]:
+    if len(submission) != len(ground_truth):
+        return None
+
+    return sum((candidate - expected) ** 2 for candidate, expected in zip(sorted(submission), ground_truth)) / len(ground_truth)
+
+
+def _score_task3(submission: list[int], ground_truth: list[int]) -> float:
+    mse = _task3_mse(submission, ground_truth)
+    if mse is None:
+        return 0.0
+
+    return round(max(0.0, 1.0 - mse), 4)
+
+
+def _task_key_for_level(task_level: int) -> str:
+    return f"task{task_level}"
+
+
+def _task_metadata(task_level: int) -> dict[str, Any]:
+    task_key = _task_key_for_level(task_level)
+    spec = TASK_SPECS[task_key]
+    return {
+        "task_id": spec["id"],
+        "task_level": spec["level"],
+        "task_name": spec["name"],
+        "grader_name": spec["grader_name"],
+        "grader_type": spec["grader_type"],
+        "partial_credit": spec["partial_credit"],
+    }
+
+
+def get_task_catalog() -> list[dict[str, Any]]:
+    """Return the public task manifest expected by validators and clients."""
+    catalog: list[dict[str, Any]] = []
+    for task_key in ("task1", "task2", "task3"):
+        spec = TASK_SPECS[task_key]
+        catalog.append(
+            {
+                "id": spec["id"],
+                "level": spec["level"],
+                "name": spec["name"],
+                "description": spec["description"],
+                "grader": {
+                    "name": spec["grader_name"],
+                    "type": spec["grader_type"],
+                    "success_criteria": spec["success_criteria"],
+                    "partial_credit": spec["partial_credit"],
+                },
+            }
+        )
+    return catalog
+
+
+def _read_readme(base_dir: str) -> Optional[str]:
+    readme_path = Path(base_dir) / "README.md"
+    if not readme_path.exists():
+        return None
+
+    return readme_path.read_text(encoding="utf-8")
+
+
+class Task1Rubric(Rubric):
+    def __init__(self, ground_truth: list[int]):
+        super().__init__()
+        self.ground_truth = list(ground_truth)
+
+    def forward(self, action: Any, observation: Any) -> float:
+        submission, error_message = _normalize_submission(getattr(action, "solution_target", None))
+        if error_message is not None or submission is None:
+            return 0.0
+        return _score_task1(submission, self.ground_truth)
+
+
+class Task2Rubric(Rubric):
+    def __init__(self, ground_truth: list[int]):
+        super().__init__()
+        self.ground_truth = list(ground_truth)
+
+    def forward(self, action: Any, observation: Any) -> float:
+        submission, error_message = _normalize_submission(getattr(action, "solution_target", None))
+        if error_message is not None or submission is None:
+            return 0.0
+        return _score_task2(submission, self.ground_truth)
+
+
+class Task3Rubric(Rubric):
+    def __init__(self, ground_truth: list[int]):
+        super().__init__()
+        self.ground_truth = list(ground_truth)
+
+    def forward(self, action: Any, observation: Any) -> float:
+        submission, error_message = _normalize_submission(getattr(action, "solution_target", None))
+        if error_message is not None or submission is None:
+            return 0.0
+        return _score_task3(submission, self.ground_truth)
+
+
+class CurriculumRubric(Rubric):
+    """Expose the benchmark's three task graders as named child rubrics."""
+
+    def __init__(self, ground_truths: dict[str, list[int]]):
+        super().__init__()
+        self.task1 = Task1Rubric(ground_truths["task1"])
+        self.task2 = Task2Rubric(ground_truths["task2"])
+        self.task3 = Task3Rubric(ground_truths["task3"])
+
+    def forward(self, action: Any, observation: Any) -> float:
+        metadata = getattr(observation, "metadata", {}) or {}
+        task_id = metadata.get("task_id", "task1")
+        rubric = getattr(self, task_id, self.task1)
+        return rubric(action, observation)
+
+
 class MechInterpEnvironment(Environment):
     SUPPORTS_CONCURRENT_SESSIONS: bool = True
 
     def __init__(self, seed: Optional[int] = None):
+        super().__init__()
         self.seed = _coerce_seed(seed)
         self.base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         self.artifacts_dir = os.path.join(self.base_dir, "artifacts")
@@ -288,6 +510,7 @@ class MechInterpEnvironment(Environment):
             "task2": _infer_task2_ground_truth(self.task2_model),
             "task3": _infer_task3_ground_truth(self.task3_model),
         }
+        self.rubric = CurriculumRubric(self.ground_truths)
 
         self._state = InterpState(episode_id=str(uuid4()), step_count=0, task_level=1)
         self.task_level = 1
@@ -307,6 +530,7 @@ class MechInterpEnvironment(Environment):
             task_level=1,
             done=False,
             reward=0.0,
+            metadata={**_task_metadata(1), "seed": self.seed, "step": 0},
         )
 
     def step(self, action: MechInterpAction) -> MechInterpObservation:
@@ -346,7 +570,7 @@ class MechInterpEnvironment(Environment):
             task_level=self.task_level,
             done=done,
             reward=reward,
-            metadata={"seed": self.seed, "step": self._state.step_count},
+            metadata={**_task_metadata(self.task_level), "seed": self.seed, "step": self._state.step_count},
         )
 
     def _current_model(self) -> nn.Module:
@@ -399,15 +623,7 @@ class MechInterpEnvironment(Environment):
 
         if self.task_level == 1:
             gt = self.ground_truths["task1"]
-            gt_set = set(gt)
-            submission_set = set(submission)
-            matches = len(submission_set & gt_set)
-            false_positives = len(submission_set - gt_set)
-
-            if submission == gt:
-                reward = 1.0
-            else:
-                reward = round(max(0.0, (matches / len(gt)) * 0.33 - (false_positives * 0.1)), 2)
+            reward = _score_task1(submission, gt)
 
             message = f"Task 1 graded. Score: {reward:.2f}"
             if reward >= 0.99:
@@ -422,7 +638,8 @@ class MechInterpEnvironment(Environment):
 
         if self.task_level == 2:
             gt = self.ground_truths["task2"]
-            if submission == gt:
+            reward = _score_task2(submission, gt)
+            if reward >= 0.99:
                 reward = 1.0
                 self.task_level = 3
                 self._state.task_level = 3
@@ -448,8 +665,8 @@ class MechInterpEnvironment(Environment):
                 False,
             )
 
-        mse = sum((candidate - expected) ** 2 for candidate, expected in zip(sorted(submission), gt)) / len(gt)
-        reward = round(max(0.0, 1.0 - mse), 4)
+        mse = _task3_mse(submission, gt)
+        reward = _score_task3(submission, gt)
 
         if reward >= 0.99:
             done = True
@@ -458,6 +675,19 @@ class MechInterpEnvironment(Environment):
             message = f"Task 3 graded. MSE={mse:.4f}, Score: {reward:.4f}"
 
         return message, reward, done
+
+    def get_metadata(self) -> EnvironmentMetadata:
+        return EnvironmentMetadata(
+            name="mech_interp",
+            description=(
+                "PyTorchSandbox mechanistic interpretability benchmark with three explicit graded tasks: "
+                "dead-neuron detection, causal ablation, and Fourier feature recovery."
+            ),
+            readme_content=_read_readme(self.base_dir),
+            version="0.1.0",
+            author="Kashyapsinh Gohil",
+            documentation_url="https://github.com/KashyapSinh-Gohil/pytorch-sandbox-mech-interp",
+        )
 
     @property
     def state(self) -> InterpState:
