@@ -21,10 +21,10 @@ except Exception as e:
 
 try:
     from ..models import MechInterpAction, MechInterpObservation
-    from .mech_interp_environment import MechInterpEnvironment
+    from .mech_interp_environment import MechInterpEnvironment, get_task_catalog
 except (ImportError, ModuleNotFoundError):
     from models import MechInterpAction, MechInterpObservation
-    from server.mech_interp_environment import MechInterpEnvironment
+    from server.mech_interp_environment import MechInterpEnvironment, get_task_catalog
 
 logger = logging.getLogger(__name__)
 
@@ -90,23 +90,18 @@ async def environment_info():
     """Describe the curriculum at a high level without leaking task answers."""
     return {
         "env_name": "mech_interp",
-        "tasks": [
-            {
-                "id": 1,
-                "name": "Dead Neuron Detection",
-                "description": "Find zeroed input features in a linear layer.",
-            },
-            {
-                "id": 2,
-                "name": "Causal Ablation",
-                "description": "Identify the hidden neuron implementing the multiplicative circuit.",
-            },
-            {
-                "id": 3,
-                "name": "Fourier Analysis",
-                "description": "Recover the planted frequencies from the embedding spectrum.",
-            },
-        ],
+        "task_count": 3,
+        "tasks": get_task_catalog(),
+    }
+
+
+@app.get("/tasks")
+async def task_manifest():
+    """Return an explicit task/grader manifest for validators and clients."""
+    return {
+        "env_name": "mech_interp",
+        "task_count": 3,
+        "tasks": get_task_catalog(),
     }
 
 

@@ -32,6 +32,7 @@ MAX_STEPS = 30
 
 MAX_RETRIES = 3
 RETRY_DELAY = 2
+MIN_TASK_SCORE = 0.01
 
 
 def log_start(task: str, env: str, model: str) -> None:
@@ -165,7 +166,7 @@ async def main() -> None:
     steps_taken = 0
     success = False
     score = 0.0
-    task_scores = {1: 0.0, 2: 0.0, 3: 0.0}
+    task_scores = {1: MIN_TASK_SCORE, 2: MIN_TASK_SCORE, 3: MIN_TASK_SCORE}
 
     log_start(task=TASK_NAME, env=BENCHMARK, model=MODEL_NAME)
 

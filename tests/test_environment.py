@@ -4,7 +4,7 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from models import MechInterpAction
-from server.mech_interp_environment import MechInterpEnvironment
+from server.mech_interp_environment import MAX_TASK_SCORE, MIN_TASK_SCORE, MechInterpEnvironment
 
 
 class TestMechInterpEnvironment(unittest.TestCase):
@@ -31,11 +31,12 @@ class TestMechInterpEnvironment(unittest.TestCase):
         # Wrong / Random guess
         obs = self.env.step(MechInterpAction(solution_target=[1, 2, 3]))
         self.assertLess(obs.reward, 1.0)
+        self.assertGreater(obs.reward, 0.0)
         self.assertEqual(obs.task_level, 1)
         
         # Correct guess
         obs = self.env.step(MechInterpAction(solution_target=[2, 5, 8]))
-        self.assertEqual(obs.reward, 1.0)
+        self.assertEqual(obs.reward, MAX_TASK_SCORE)
         self.assertEqual(obs.task_level, 2)
         self.assertIn("Moving to Task 2", obs.stdout_or_error)
 
@@ -47,17 +48,17 @@ class TestMechInterpEnvironment(unittest.TestCase):
 
         # Wrong guess
         obs = self.env.step(MechInterpAction(solution_target=[7]))
-        self.assertEqual(obs.reward, 0.0)
+        self.assertEqual(obs.reward, MIN_TASK_SCORE)
         self.assertEqual(obs.task_level, 2)
 
         # False positives should not advance the task
         obs = self.env.step(MechInterpAction(solution_target=[2, 5]))
-        self.assertEqual(obs.reward, 0.0)
+        self.assertEqual(obs.reward, MIN_TASK_SCORE)
         self.assertEqual(obs.task_level, 2)
 
         # Correct guess
         obs = self.env.step(MechInterpAction(solution_target=[2]))
-        self.assertEqual(obs.reward, 1.0)
+        self.assertEqual(obs.reward, MAX_TASK_SCORE)
         self.assertEqual(obs.task_level, 3)
 
     def test_task3_grading_and_completion(self):
@@ -68,9 +69,24 @@ class TestMechInterpEnvironment(unittest.TestCase):
         
         # Expected target: [2, 17, 23, 44, 47]
         obs = self.env.step(MechInterpAction(solution_target=[2, 17, 23, 44, 47]))
-        self.assertEqual(obs.reward, 1.0)
+        self.assertEqual(obs.reward, MAX_TASK_SCORE)
         self.assertTrue(obs.done)
         self.assertIn("All tasks completed", obs.stdout_or_error)
+
+    def test_environment_exposes_three_named_graders_with_in_range_scores(self):
+        rubric_names = [name for name, _rubric in self.env.rubric.named_rubrics()]
+        self.assertEqual(rubric_names, ["task1", "task2", "task3"])
+        for _name, rubric in self.env.rubric.named_rubrics():
+            self.assertGreater(rubric.last_score, 0.0)
+            self.assertLess(rubric.last_score, 1.0)
+
+    def test_solution_attempt_updates_matching_child_rubric(self):
+        self.env.reset()
+        obs = self.env.step(MechInterpAction(solution_target=[2, 5, 8]))
+        self.assertEqual(obs.metadata["task_id"], "task1")
+        self.assertEqual(self.env.rubric.task1.last_score, MAX_TASK_SCORE)
+        self.assertGreater(self.env.rubric.task2.last_score, 0.0)
+        self.assertLess(self.env.rubric.task2.last_score, 1.0)
 
 
 if __name__ == '__main__':
