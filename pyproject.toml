@@ -38,5 +38,19 @@ server = "mech_interp.server.app:main"
 
 [tool.setuptools]
 include-package-data = true
-packages = ["mech_interp", "mech_interp.server"]
-package-dir = { "mech_interp" = ".", "mech_interp.server" = "server" }
+packages = [
+    "mech_interp",
+    "mech_interp.server",
+    "tasks",
+    "tasks.task1",
+    "tasks.task2",
+    "tasks.task3",
+]
+
+[tool.setuptools.package-dir]
+"mech_interp" = "."
+"mech_interp.server" = "server"
+"tasks" = "tasks"
+"tasks.task1" = "tasks/task1"
+"tasks.task2" = "tasks/task2"
+"tasks.task3" = "tasks/task3"

@@ -1,8 +1,10 @@
+import importlib
 import os
 import sys
 import unittest
 
 from fastapi.testclient import TestClient
+import yaml
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -41,6 +43,33 @@ class TestAppManifest(unittest.TestCase):
         payload = response.json()
         self.assertEqual(payload["name"], "mech_interp")
         self.assertIn("three graded tasks", payload["description"])
+
+    def test_openenv_manifest_declares_three_task_graders(self):
+        manifest_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "openenv.yaml")
+        with open(manifest_path, "r", encoding="utf-8") as handle:
+            manifest = yaml.safe_load(handle)
+
+        self.assertEqual(len(manifest["tasks"]), 3)
+        grader_paths = [task["grader"] for task in manifest["tasks"]]
+        self.assertEqual(
+            grader_paths,
+            [
+                "tasks.task1.grader:grade",
+                "tasks.task2.grader:grade",
+                "tasks.task3.grader:grade",
+            ],
+        )
+
+    def test_manifest_grader_entrypoints_are_importable(self):
+        manifest_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "openenv.yaml")
+        with open(manifest_path, "r", encoding="utf-8") as handle:
+            manifest = yaml.safe_load(handle)
+
+        for task in manifest["tasks"]:
+            module_name, func_name = task["grader"].split(":")
+            module = importlib.import_module(module_name)
+            grader = getattr(module, func_name)
+            self.assertTrue(callable(grader))
 
 
 if __name__ == "__main__":

@@ -1,7 +1,28 @@
+version: "1.0"
 spec_version: 1
 name: mech_interp
+description: PyTorchSandbox mechanistic interpretability benchmark with three graded tasks.
 type: space
 runtime: fastapi
 app: server.app:app
 port: 8000
-
+action: MechInterpAction
+observation: MechInterpObservation
+state: InterpState
+environment: server.mech_interp_environment:MechInterpEnvironment
+tasks:
+  - id: task1
+    name: Dead Neuron Detection
+    description: Find all zero-weight input indices in the Linear(10,1) model.
+    difficulty: easy
+    grader: tasks.task1.grader:grade
+  - id: task2
+    name: Causal Ablation
+    description: Identify the hidden neuron responsible for the multiplicative circuit.
+    difficulty: medium
+    grader: tasks.task2.grader:grade
+  - id: task3
+    name: Fourier Analysis
+    description: Recover the planted frequencies from the embedding spectrum.
+    difficulty: hard
+    grader: tasks.task3.grader:grade
