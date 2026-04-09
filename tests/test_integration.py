@@ -8,6 +8,8 @@ import json
 import torch
 import torch.nn as nn
 
+from server.mech_interp_environment import MAX_TASK_SCORE, MIN_TASK_SCORE
+
 class TestEndToEndIntegration(unittest.TestCase):
     """Integration tests for complete workflows."""
     
@@ -19,15 +21,15 @@ class TestEndToEndIntegration(unittest.TestCase):
         
         # Grading logic
         if submission == expected:
-            reward = 1.0
+            reward = MAX_TASK_SCORE
             task_level_next = 2
             done = False
         else:
-            reward = 0.0
+            reward = MIN_TASK_SCORE
             task_level_next = 1
             done = False
         
-        self.assertEqual(reward, 1.0)
+        self.assertEqual(reward, MAX_TASK_SCORE)
         self.assertEqual(task_level_next, 2)
         self.assertFalse(done)
     
@@ -38,15 +40,15 @@ class TestEndToEndIntegration(unittest.TestCase):
         expected = [2]
         
         if submission == expected:
-            reward = 1.0
+            reward = MAX_TASK_SCORE
             task_level_next = 3
             done = False
         else:
-            reward = 0.0
+            reward = MIN_TASK_SCORE
             task_level_next = 2
             done = False
         
-        self.assertEqual(reward, 1.0)
+        self.assertEqual(reward, MAX_TASK_SCORE)
         self.assertEqual(task_level_next, 3)
         self.assertFalse(done)
     
@@ -57,21 +59,21 @@ class TestEndToEndIntegration(unittest.TestCase):
         expected = [2, 17, 23, 44, 47]
         
         if submission == expected:
-            reward = 1.0
+            reward = MAX_TASK_SCORE
             done = True
         else:
-            reward = 0.0
+            reward = MIN_TASK_SCORE
             done = False
         
-        self.assertEqual(reward, 1.0)
+        self.assertEqual(reward, MAX_TASK_SCORE)
         self.assertTrue(done)
     
     def test_full_3task_curriculum(self):
         """Complete all 3 tasks in sequence."""
         task_sequence = [
-            {"task": 1, "submission": [2, 5, 8], "expected_reward": 1.0, "next_task": 2},
-            {"task": 2, "submission": [2], "expected_reward": 1.0, "next_task": 3},
-            {"task": 3, "submission": [2, 17, 23, 44, 47], "expected_reward": 1.0, "next_task": None},
+            {"task": 1, "submission": [2, 5, 8], "expected_reward": MAX_TASK_SCORE, "next_task": 2},
+            {"task": 2, "submission": [2], "expected_reward": MAX_TASK_SCORE, "next_task": 3},
+            {"task": 3, "submission": [2, 17, 23, 44, 47], "expected_reward": MAX_TASK_SCORE, "next_task": None},
         ]
         
         current_task = 1
@@ -84,7 +86,7 @@ class TestEndToEndIntegration(unittest.TestCase):
             if step_data["next_task"]:
                 current_task = step_data["next_task"]
         
-        self.assertEqual(total_reward, 3.0)
+        self.assertAlmostEqual(total_reward, MAX_TASK_SCORE * 3, places=6)
         self.assertIsNone(task_sequence[-1]["next_task"])
     
     def test_json_action_formats(self):
@@ -121,7 +123,7 @@ class TestEndToEndIntegration(unittest.TestCase):
         self.assertIn("error=", step_log)
         
         # [END] format
-        end_log = "[END] success=true steps=5 score=3.000 rewards=1.00,1.00,1.00"
+        end_log = "[END] success=true steps=5 score=0.990 rewards=0.99,0.99,0.99"
         self.assertIn("[END]", end_log)
         self.assertIn("success=", end_log)
         self.assertIn("steps=", end_log)
@@ -154,17 +156,18 @@ class TestEndToEndIntegration(unittest.TestCase):
         """Verify task advancement requires specific rewards."""
         
         # Task 1 advancement: reward >= 0.99
-        reward1 = 1.0
+        reward1 = MAX_TASK_SCORE
         should_advance_1 = reward1 >= 0.99
         self.assertTrue(should_advance_1)
         
-        # Task 2 advancement: reward >= 1.0
-        reward2 = 1.0
-        should_advance_2 = reward2 >= 1.0
+        # Task 2 advancement uses an exact-match solve, even though the published score is 0.99
+        reward2 = MAX_TASK_SCORE
+        solved_task2 = True
+        should_advance_2 = solved_task2 and reward2 >= 0.99
         self.assertTrue(should_advance_2)
         
         # Task 3 completion: reward >= 0.99
-        reward3 = 1.0
+        reward3 = MAX_TASK_SCORE
         should_complete = reward3 >= 0.99
         self.assertTrue(should_complete)
 
@@ -196,9 +199,9 @@ class TestErrorHandling(unittest.TestCase):
         is_list = isinstance(submission, list)
         self.assertFalse(is_list)
         
-        # Should result in reward 0.0
-        reward = 0.0 if not is_list else 1.0
-        self.assertEqual(reward, 0.0)
+        # Validator-facing task scores should stay inside the open interval (0, 1)
+        reward = MIN_TASK_SCORE if not is_list else MAX_TASK_SCORE
+        self.assertEqual(reward, MIN_TASK_SCORE)
     
     def test_syntax_error_in_code(self):
         """Syntax errors in submitted code should be caught."""
@@ -240,14 +243,14 @@ class TestConsistencyAndDeterminism(unittest.TestCase):
         rewards = []
         for _ in range(5):
             if submission == expected:
-                reward = 1.0
+                reward = MAX_TASK_SCORE
             else:
-                reward = 0.0
+                reward = MIN_TASK_SCORE
             rewards.append(reward)
         
         # All should be same
         self.assertEqual(len(set(rewards)), 1)
-        self.assertEqual(rewards[0], 1.0)
+        self.assertEqual(rewards[0], MAX_TASK_SCORE)
     
     def test_grading_deterministic_task2(self):
         """Task 2 grading must be deterministic."""
@@ -257,13 +260,13 @@ class TestConsistencyAndDeterminism(unittest.TestCase):
         rewards = []
         for _ in range(5):
             if submission == expected:
-                reward = 1.0
+                reward = MAX_TASK_SCORE
             else:
-                reward = 0.0
+                reward = MIN_TASK_SCORE
             rewards.append(reward)
         
         self.assertEqual(len(set(rewards)), 1)
-        self.assertEqual(rewards[0], 1.0)
+        self.assertEqual(rewards[0], MAX_TASK_SCORE)
     
     def test_task_level_state_consistency(self):
         """Task level state must persist across steps."""
