@@ -1,9 +1,9 @@
-# FINAL: explicit 3-task / 3-grader declaration for hackathon validation.
+# FINAL: explicit 4-task / 4-grader declaration for hackathon validation.
 version: "1.0"
 spec_version: 1
 openenv_version: "0.2.2"
 name: mech_interp
-description: PyTorchSandbox mechanistic interpretability benchmark with three graded tasks.
+description: PyTorchSandbox mechanistic interpretability benchmark with four graded tasks.
 type: space
 runtime: fastapi
 app: server.app:app
@@ -43,6 +43,15 @@ tasks:
     has_grader: true
     grader:
       module: tasks.task3.grader
+      function: grade
+  - id: task4
+    name: additive_bypass_attribution
+    title: Additive Bypass Attribution
+    description: Identify the hidden neuron that directly carries the additive x3 bypass.
+    difficulty: medium
+    has_grader: true
+    grader:
+      module: tasks.task4.grader
       function: grade
 grader:
   module: tasks.graders

@@ -56,7 +56,7 @@ from models import MechInterpAction, MechInterpObservation, InterpState
 # TEST SUITE 1: UNIT TESTS - Grading Logic
 # ============================================================================
 class TestGradingLogic(unittest.TestCase):
-    """Verify grading logic for all 3 tasks."""
+    """Verify grading logic for the benchmark curriculum."""
     
     def test_task1_ground_truth(self):
         """Task 1 ground truth must be [2, 5, 8]."""
@@ -455,8 +455,8 @@ class TestModelArchitectures(unittest.TestCase):
 class TestInferenceScriptSetup(unittest.TestCase):
     """Test inference script configuration."""
     
-    def test_inference_prefers_validator_api_key(self):
-        """Inference should use the validator API key before local fallbacks."""
+    def test_inference_requires_hf_token_and_uses_openai_client(self):
+        """Inference should require HF_TOKEN and initialize the OpenAI client with it."""
         inference_path = os.path.join(
             os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
             "inference.py",
@@ -464,9 +464,9 @@ class TestInferenceScriptSetup(unittest.TestCase):
         with open(inference_path, encoding="utf-8") as inference_file:
             content = inference_file.read()
 
-        self.assertIn('API_KEY = os.getenv("API_KEY")', content)
-        self.assertIn("return API_KEY or HF_TOKEN", content)
-        self.assertIn("client = OpenAI(base_url=API_BASE_URL, api_key=api_key)", content)
+        self.assertIn('HF_TOKEN = os.getenv("HF_TOKEN")', content)
+        self.assertIn('raise RuntimeError("HF_TOKEN environment variable is required")', content)
+        self.assertIn("client = OpenAI(base_url=API_BASE_URL, api_key=HF_TOKEN)", content)
     
     def test_inference_api_router_configured(self):
         """Inference should use HF router for API calls."""
@@ -475,8 +475,7 @@ class TestInferenceScriptSetup(unittest.TestCase):
     
     def test_inference_model_available_on_hf(self):
         """Model used in inference must be available on HF."""
-        # Default model: "Qwen/Qwen2.5-72B-Instruct"
-        model_name = "Qwen/Qwen2.5-72B-Instruct"
+        model_name = "deepseek-ai/DeepSeek-V3-0324"
         self.assertIn("/", model_name)  # Should have org/model format
 
 

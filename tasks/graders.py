@@ -11,6 +11,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from tasks.task1.grader import grade as grade_task1
 from tasks.task2.grader import grade as grade_task2
 from tasks.task3.grader import grade as grade_task3
+from tasks.task4.grader import grade as grade_task4
 
 
 def _extract_task_id(observation: Any) -> str:
@@ -32,6 +33,8 @@ def _extract_task_id(observation: Any) -> str:
         return "task2"
     if task_level == 3:
         return "task3"
+    if task_level == 4:
+        return "task4"
     return "task1"
 
 
@@ -42,4 +45,6 @@ def grade_task(action: Any, observation: Any = None) -> float:
         return grade_task2(action, observation)
     if task_id == "task3":
         return grade_task3(action, observation)
+    if task_id == "task4":
+        return grade_task4(action, observation)
     return grade_task1(action, observation)

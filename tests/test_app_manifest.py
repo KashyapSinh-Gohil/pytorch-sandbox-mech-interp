@@ -16,12 +16,12 @@ class TestAppManifest(unittest.TestCase):
     def setUp(self):
         self.client = TestClient(app)
 
-    def test_info_exposes_three_tasks_with_graders(self):
+    def test_info_exposes_four_tasks_with_graders(self):
         response = self.client.get("/info")
         self.assertEqual(response.status_code, 200)
         payload = response.json()
-        self.assertEqual(payload["task_count"], 3)
-        self.assertEqual(len(payload["tasks"]), 3)
+        self.assertEqual(payload["task_count"], 4)
+        self.assertEqual(len(payload["tasks"]), 4)
         self.assertTrue(all("grader" in task for task in payload["tasks"]))
 
     def test_tasks_endpoint_matches_validator_shape(self):
@@ -35,24 +35,25 @@ class TestAppManifest(unittest.TestCase):
                 "dead_neuron_detection_grader",
                 "causal_ablation_grader",
                 "fourier_frequency_recovery_grader",
+                "additive_bypass_attribution_grader",
             ],
         )
         reset_payloads = [task["reset_payload"]["task_id"] for task in payload["tasks"]]
-        self.assertEqual(reset_payloads, ["task1", "task2", "task3"])
+        self.assertEqual(reset_payloads, ["task1", "task2", "task3", "task4"])
 
-    def test_metadata_mentions_three_graded_tasks(self):
+    def test_metadata_mentions_four_graded_tasks(self):
         response = self.client.get("/metadata")
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual(payload["name"], "mech_interp")
-        self.assertIn("three graded tasks", payload["description"])
+        self.assertIn("four graded tasks", payload["description"])
 
-    def test_openenv_manifest_declares_three_task_graders(self):
+    def test_openenv_manifest_declares_four_task_graders(self):
         manifest_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "openenv.yaml")
         with open(manifest_path, "r", encoding="utf-8") as handle:
             manifest = yaml.safe_load(handle)
 
-        self.assertEqual(len(manifest["tasks"]), 3)
+        self.assertEqual(len(manifest["tasks"]), 4)
         grader_paths = [
             f"{task['grader']['module']}:{task['grader']['function']}"
             for task in manifest["tasks"]
@@ -63,6 +64,7 @@ class TestAppManifest(unittest.TestCase):
                 "tasks.task1.grader:grade",
                 "tasks.task2.grader:grade",
                 "tasks.task3.grader:grade",
+                "tasks.task4.grader:grade",
             ],
         )
         self.assertEqual(manifest["grader"]["module"], "tasks.graders")
@@ -84,18 +86,18 @@ class TestAppManifest(unittest.TestCase):
         top_grader = getattr(top_module, manifest["grader"]["function"])
         self.assertTrue(callable(top_grader))
 
-    def test_static_tasks_json_matches_three_task_shape(self):
+    def test_static_tasks_json_matches_four_task_shape(self):
         manifest_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tasks.json")
         with open(manifest_path, "r", encoding="utf-8") as handle:
             manifest = json.load(handle)
 
-        self.assertEqual(manifest["task_count"], 3)
-        self.assertEqual(manifest["grader_count"], 3)
-        self.assertEqual(len(manifest["tasks"]), 3)
+        self.assertEqual(manifest["task_count"], 4)
+        self.assertEqual(manifest["grader_count"], 4)
+        self.assertEqual(len(manifest["tasks"]), 4)
         self.assertTrue(all(task["has_grader"] for task in manifest["tasks"]))
         self.assertEqual(
             [task["reset_payload"]["task_id"] for task in manifest["tasks"]],
-            ["task1", "task2", "task3"],
+            ["task1", "task2", "task3", "task4"],
         )
 
 

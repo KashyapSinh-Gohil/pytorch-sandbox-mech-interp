@@ -67,27 +67,46 @@ class TestEndToEndIntegration(unittest.TestCase):
         self.assertEqual(task_level_next, 2)
     
     def test_task3_complete_workflow(self):
-        """Complete workflow: reset → code → grading → completion."""
+        """Complete workflow: reset → code → grading → advancement."""
         # Task 3: Find Fourier frequencies [2, 17, 23, 44, 47]
         submission = [2, 17, 23, 44, 47]
         expected = [2, 17, 23, 44, 47]
         
         if submission == expected:
             reward = MAX_TASK_SCORE
+            task_level_next = 4
+            done = False
+        else:
+            reward = MIN_TASK_SCORE
+            task_level_next = 3
+            done = False
+        
+        self.assertEqual(reward, MAX_TASK_SCORE)
+        self.assertEqual(task_level_next, 4)
+        self.assertFalse(done)
+
+    def test_task4_complete_workflow(self):
+        """Complete workflow: reset → code → grading → completion."""
+        submission = [3]
+        expected = [3]
+
+        if submission == expected:
+            reward = MAX_TASK_SCORE
             done = True
         else:
             reward = MIN_TASK_SCORE
             done = False
-        
+
         self.assertEqual(reward, MAX_TASK_SCORE)
         self.assertTrue(done)
     
-    def test_full_3task_curriculum(self):
-        """Complete all 3 tasks in sequence."""
+    def test_full_4task_curriculum(self):
+        """Complete all 4 tasks in sequence."""
         task_sequence = [
             {"task": 1, "submission": [2, 5, 8], "expected_reward": MAX_TASK_SCORE, "next_task": 2},
             {"task": 2, "submission": [2], "expected_reward": MAX_TASK_SCORE, "next_task": 3},
-            {"task": 3, "submission": [2, 17, 23, 44, 47], "expected_reward": MAX_TASK_SCORE, "next_task": None},
+            {"task": 3, "submission": [2, 17, 23, 44, 47], "expected_reward": MAX_TASK_SCORE, "next_task": 4},
+            {"task": 4, "submission": [3], "expected_reward": MAX_TASK_SCORE, "next_task": None},
         ]
         
         current_task = 1
@@ -100,7 +119,7 @@ class TestEndToEndIntegration(unittest.TestCase):
             if step_data["next_task"]:
                 current_task = step_data["next_task"]
         
-        self.assertAlmostEqual(total_reward, MAX_TASK_SCORE * 3, places=6)
+        self.assertAlmostEqual(total_reward, MAX_TASK_SCORE * 4, places=6)
         self.assertIsNone(task_sequence[-1]["next_task"])
     
     def test_json_action_formats(self):
@@ -122,7 +141,7 @@ class TestEndToEndIntegration(unittest.TestCase):
         """Verify logging output format matches spec."""
         
         # [START] format
-        start_log = "[START] task=mech_interp_curriculum env=pytorch_sandbox model=Qwen/Qwen2.5-72B-Instruct"
+        start_log = "[START] task=mech_interp_curriculum env=pytorch_sandbox model=deepseek-ai/DeepSeek-V3-0324"
         self.assertIn("[START]", start_log)
         self.assertIn("task=", start_log)
         self.assertIn("env=", start_log)
@@ -137,11 +156,10 @@ class TestEndToEndIntegration(unittest.TestCase):
         self.assertIn("error=", step_log)
         
         # [END] format
-        end_log = "[END] success=true steps=5 score=0.990 rewards=0.99,0.99,0.99"
+        end_log = "[END] success=true steps=5 rewards=0.99,0.99,0.99"
         self.assertIn("[END]", end_log)
         self.assertIn("success=", end_log)
         self.assertIn("steps=", end_log)
-        self.assertIn("score=", end_log)
         self.assertIn("rewards=", end_log)
     
     def test_timeout_resilience(self):
@@ -180,9 +198,14 @@ class TestEndToEndIntegration(unittest.TestCase):
         should_advance_2 = solved_task2 and reward2 >= 0.99
         self.assertTrue(should_advance_2)
         
-        # Task 3 completion: reward >= 0.99
+        # Task 3 advancement: reward >= 0.99
         reward3 = MAX_TASK_SCORE
-        should_complete = reward3 >= 0.99
+        should_advance_3 = reward3 >= 0.99
+        self.assertTrue(should_advance_3)
+
+        # Task 4 completion: reward >= 0.99
+        reward4 = MAX_TASK_SCORE
+        should_complete = reward4 >= 0.99
         self.assertTrue(should_complete)
 
 
@@ -248,6 +271,12 @@ class TestConsistencyAndDeterminism(unittest.TestCase):
         for _ in range(10):
             ground_truth = [2, 17, 23, 44, 47]
             self.assertEqual(ground_truth, [2, 17, 23, 44, 47])
+
+    def test_ground_truth_deterministic_task4(self):
+        """Task 4 ground truth must always be [3]."""
+        for _ in range(10):
+            ground_truth = [3]
+            self.assertEqual(ground_truth, [3])
     
     def test_grading_deterministic_task1(self):
         """Task 1 grading must be deterministic."""
@@ -281,14 +310,31 @@ class TestConsistencyAndDeterminism(unittest.TestCase):
         
         self.assertEqual(len(set(rewards)), 1)
         self.assertEqual(rewards[0], MAX_TASK_SCORE)
+
+    def test_grading_deterministic_task4(self):
+        """Task 4 grading must be deterministic."""
+        submission = [3]
+        expected = [3]
+
+        rewards = []
+        for _ in range(5):
+            if submission == expected:
+                reward = MAX_TASK_SCORE
+            else:
+                reward = MIN_TASK_SCORE
+            rewards.append(reward)
+
+        self.assertEqual(len(set(rewards)), 1)
+        self.assertEqual(rewards[0], MAX_TASK_SCORE)
     
     def test_task_level_state_consistency(self):
         """Task level state must persist across steps."""
-        # Simulate: complete task 1 (3 steps) -> task 2 (3 steps) -> task 3 (2 steps)
+        # Simulate: complete task 1 -> task 2 -> task 3 -> task 4
         step_to_task = {
             1: 1, 2: 1, 3: 1,  # Task 1 steps
             4: 2, 5: 2, 6: 2,  # Task 2 steps (advance after step 3)
             7: 3, 8: 3,        # Task 3 steps (advance after step 6)
+            9: 4, 10: 4,       # Task 4 steps
         }
         
         current_task = 1
@@ -300,6 +346,8 @@ class TestConsistencyAndDeterminism(unittest.TestCase):
                 current_task = 2
             elif step == 6:
                 current_task = 3
+            elif step == 8:
+                current_task = 4
 
 
 if __name__ == "__main__":

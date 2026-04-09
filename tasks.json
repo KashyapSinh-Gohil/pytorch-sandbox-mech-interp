@@ -1,7 +1,7 @@
 {
-  "final_submission_note": "FINAL: explicit validator-facing task registry with 3 tasks and 3 grader entrypoints.",
-  "task_count": 3,
-  "grader_count": 3,
+  "final_submission_note": "FINAL: explicit validator-facing task registry with 4 tasks and 4 grader entrypoints.",
+  "task_count": 4,
+  "grader_count": 4,
   "tasks": [
     {
       "id": "task1",
@@ -50,6 +50,24 @@
       "grader": {
         "name": "fourier_frequency_recovery_grader",
         "module": "tasks.task3.grader",
+        "function": "grade",
+        "score_range": {
+          "min_exclusive": 0.0,
+          "max_exclusive": 1.0
+        }
+      }
+    },
+    {
+      "id": "task4",
+      "level": 4,
+      "name": "Additive Bypass Attribution",
+      "has_grader": true,
+      "reset_payload": {
+        "task_id": "task4"
+      },
+      "grader": {
+        "name": "additive_bypass_attribution_grader",
+        "module": "tasks.task4.grader",
         "function": "grade",
         "score_range": {
           "min_exclusive": 0.0,

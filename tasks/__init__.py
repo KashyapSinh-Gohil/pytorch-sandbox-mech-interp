@@ -3,6 +3,7 @@
 from .task1.grader import grade as grade_task1
 from .task2.grader import grade as grade_task2
 from .task3.grader import grade as grade_task3
+from .task4.grader import grade as grade_task4
 
 TASKS = [
     {
@@ -32,6 +33,15 @@ TASKS = [
         "grader_function": "grade",
         "grader_callable": grade_task3,
     },
+    {
+        "id": "task4",
+        "level": 4,
+        "name": "Additive Bypass Attribution",
+        "grader_name": "additive_bypass_attribution_grader",
+        "grader_module": "tasks.task4.grader",
+        "grader_function": "grade",
+        "grader_callable": grade_task4,
+    },
 ]
 
 TASK_COUNT = len(TASKS)
@@ -44,4 +54,5 @@ __all__ = [
     "grade_task1",
     "grade_task2",
     "grade_task3",
+    "grade_task4",
 ]

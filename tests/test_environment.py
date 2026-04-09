@@ -63,7 +63,7 @@ class TestMechInterpEnvironment(unittest.TestCase):
         self.assertEqual(obs.reward, MAX_TASK_SCORE)
         self.assertEqual(obs.task_level, 3)
 
-    def test_task3_grading_and_completion(self):
+    def test_task3_grading_and_advancement(self):
         self.env.reset()
         # Skip to task 3
         self.env.task_level = 3
@@ -72,12 +72,23 @@ class TestMechInterpEnvironment(unittest.TestCase):
         # Expected target: [2, 17, 23, 44, 47]
         obs = self.env.step(MechInterpAction(solution_target=[2, 17, 23, 44, 47]))
         self.assertEqual(obs.reward, MAX_TASK_SCORE)
-        self.assertTrue(obs.done)
-        self.assertIn("All tasks completed", obs.stdout_or_error)
+        self.assertFalse(obs.done)
+        self.assertEqual(obs.task_level, 4)
+        self.assertIn("Moving to Task 4", obs.stdout_or_error)
 
-    def test_environment_exposes_three_named_graders_with_in_range_scores(self):
+    def test_task4_grading_and_completion(self):
+        self.env.reset()
+        self.env.task_level = 4
+        self.env._state.task_level = 4
+
+        obs = self.env.step(MechInterpAction(solution_target=[3]))
+        self.assertEqual(obs.reward, MAX_TASK_SCORE)
+        self.assertTrue(obs.done)
+        self.assertIn("All four tasks completed", obs.stdout_or_error)
+
+    def test_environment_exposes_four_named_graders_with_in_range_scores(self):
         rubric_names = [name for name, _rubric in self.env.rubric.named_rubrics()]
-        self.assertEqual(rubric_names, ["task1", "task2", "task3"])
+        self.assertEqual(rubric_names, ["task1", "task2", "task3", "task4"])
         for _name, rubric in self.env.rubric.named_rubrics():
             self.assertGreater(rubric.last_score, 0.0)
             self.assertLess(rubric.last_score, 1.0)
@@ -93,6 +104,12 @@ class TestMechInterpEnvironment(unittest.TestCase):
         self.assertEqual(obs.task_level, 3)
         self.assertIn("Task 3", obs.stdout_or_error)
         self.assertEqual(obs.metadata["task_id"], "task3")
+
+    def test_reset_can_start_directly_at_task4(self):
+        obs = self.env.reset(task_id="task4")
+        self.assertEqual(obs.task_level, 4)
+        self.assertIn("Task 4", obs.stdout_or_error)
+        self.assertEqual(obs.metadata["task_id"], "task4")
 
     def test_solution_attempt_updates_matching_child_rubric(self):
         self.env.reset()

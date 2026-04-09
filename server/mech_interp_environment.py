@@ -137,6 +137,15 @@ TASK_SPECS = {
         "grader_module": "tasks.task3.grader",
         "grader_function": "grade",
     },
+    "task4": {
+        "id": "task4",
+        "level": 4,
+        "name": "Additive Bypass Attribution",
+        "description": "Identify the hidden neuron that directly carries the additive x3 bypass.",
+        "grader_name": "additive_bypass_attribution_grader",
+        "grader_module": "tasks.task4.grader",
+        "grader_function": "grade",
+    },
 }
 
 TASK_ALIASES = {
@@ -152,6 +161,12 @@ TASK_ALIASES = {
     "3": "task3",
     "fourier_analysis": "task3",
     "fourier analysis": "task3",
+    "task4": "task4",
+    "4": "task4",
+    "additive_bypass_attribution": "task4",
+    "additive bypass attribution": "task4",
+    "additive_bypass": "task4",
+    "additive bypass": "task4",
 }
 
 EXEC_RUNNER = """
@@ -336,6 +351,51 @@ def _infer_task3_ground_truth(model: nn.Module) -> list[int]:
     return sorted(int(index) for index in frequency_indices if int(index) > 0)
 
 
+def _infer_task4_ground_truth(model: nn.Module) -> list[int]:
+    """Identify the hidden neuron that carries the additive x3 signal."""
+    hidden_layer = getattr(model, "hidden", None)
+    add_idx = getattr(hidden_layer, "add_idx", None)
+    if add_idx is not None:
+        return [int(add_idx)]
+
+    if hidden_layer is None:
+        raise ValueError("Task 4 model is missing the hidden layer used for attribution.")
+
+    inputs = torch.tensor(
+        [
+            [0.0, 0.0, 2.0],
+            [0.0, 0.0, -3.5],
+            [0.0, 0.0, 5.25],
+        ],
+        dtype=torch.float32,
+    )
+    with torch.no_grad():
+        baseline = model(inputs)
+        hidden_dim = model.hidden(inputs).shape[1]
+
+    best_idx = 0
+    best_score = -1.0
+    for candidate_idx in range(hidden_dim):
+        def _ablate(_module: nn.Module, _args: tuple[torch.Tensor, ...], output: torch.Tensor) -> torch.Tensor:
+            patched_output = output.clone()
+            patched_output[:, candidate_idx] = 0
+            return patched_output
+
+        handle = model.hidden.register_forward_hook(_ablate)
+        try:
+            with torch.no_grad():
+                ablated = model(inputs)
+        finally:
+            handle.remove()
+
+        score = (baseline - ablated).abs().sum().item()
+        if score > best_score:
+            best_idx = candidate_idx
+            best_score = score
+
+    return [int(best_idx)]
+
+
 def _normalize_submission(raw_submission: object) -> tuple[Optional[list[int]], Optional[str]]:
     """Convert a raw submission into a clean list of integers, or return a validation error."""
     if not isinstance(raw_submission, list):
@@ -403,6 +463,14 @@ def _score_task3_raw(submission: list[int], ground_truth: list[int]) -> float:
     if mse is None:
         return 0.0
     return max(0.0, 1.0 - mse)
+
+
+def _score_task4_raw(submission: list[int], ground_truth: list[int]) -> float:
+    if submission == ground_truth:
+        return 1.0
+    if ground_truth[0] in submission:
+        return max(0.1, 0.8 / len(submission))
+    return 0.0
 
 
 def _task_key_for_level(task_level: int) -> str:
@@ -484,6 +552,15 @@ def _build_reset_prompt(task_key: str, seed: int) -> str:
             '{"solution_target": [f1, f2, f3, f4, f5]}.'
         )
 
+    if task_key == "task4":
+        return (
+            f"PyTorchSandbox environment ready. (Seed: {seed})\n"
+            "Task 4: Additive Bypass Attribution.\n"
+            "The same causal-ablation MLP has one hidden neuron that directly carries the additive x3 pathway.\n"
+            "Use targeted ablations on `model.hidden` to identify the single additive bypass neuron, then submit "
+            '{"solution_target": [neuron_index]}.'
+        )
+
     return (
         f"PyTorchSandbox environment ready. (Seed: {seed})\n"
         "Task 1: Dead Neuron Detection.\n"
@@ -532,12 +609,26 @@ class Task3Rubric(Rubric):
         return _clamp_task_score(_score_task3_raw(submission, self.ground_truth))
 
 
+class Task4Rubric(Rubric):
+    def __init__(self, ground_truth: list[int]):
+        super().__init__()
+        self.ground_truth = list(ground_truth)
+        self.last_score = 0.5
+
+    def forward(self, action: Any, observation: Any) -> float:
+        submission, error_message = _normalize_submission(getattr(action, "solution_target", None))
+        if error_message is not None or submission is None:
+            return MIN_TASK_SCORE
+        return _clamp_task_score(_score_task4_raw(submission, self.ground_truth))
+
+
 class CurriculumRubric(Rubric):
     def __init__(self, ground_truths: dict[str, list[int]]):
         super().__init__()
         self.task1 = Task1Rubric(ground_truths["task1"])
         self.task2 = Task2Rubric(ground_truths["task2"])
         self.task3 = Task3Rubric(ground_truths["task3"])
+        self.task4 = Task4Rubric(ground_truths["task4"])
         self.last_score = 0.5
 
     def forward(self, action: Any, observation: Any) -> float:
@@ -577,6 +668,7 @@ class MechInterpEnvironment(Environment):
             "task1": _infer_task1_ground_truth(self.task1_model),
             "task2": _infer_task2_ground_truth(self.task2_model),
             "task3": _infer_task3_ground_truth(self.task3_model),
+            "task4": _infer_task4_ground_truth(self.task2_model),
         }
         super().__init__(rubric=CurriculumRubric(self.ground_truths))
 
@@ -668,7 +760,7 @@ class MechInterpEnvironment(Environment):
     def _current_model(self) -> nn.Module:
         if self.task_level == 1:
             return self.task1_model
-        if self.task_level == 2:
+        if self.task_level in (2, 4):
             return self.task2_model
         return self.task3_model
 
@@ -755,29 +847,58 @@ class MechInterpEnvironment(Environment):
             return message, reward, done
 
         gt = self.ground_truths["task3"]
-        if len(submission) != len(gt):
-            return (
-                f"Task 3 failed. Expected exactly {len(gt)} frequency indices, got {len(submission)}.",
-                MIN_TASK_SCORE,
-                False,
-            )
+        if self.task_level == 3:
+            if len(submission) != len(gt):
+                return (
+                    f"Task 3 failed. Expected exactly {len(gt)} frequency indices, got {len(submission)}.",
+                    MIN_TASK_SCORE,
+                    False,
+                )
 
-        mse = _task3_mse(submission, gt) or 0.0
-        reward = _clamp_task_score(_score_task3_raw(submission, gt))
+            mse = _task3_mse(submission, gt) or 0.0
+            reward = _clamp_task_score(_score_task3_raw(submission, gt))
 
+            if submission == gt:
+                self.task_level = 4
+                self._state.task_level = 4
+                message = (
+                    f"Task 3 graded. MSE={mse:.4f}, Score: {reward:.4f}\n\n"
+                    "Moving to Task 4: Additive Bypass Attribution.\n"
+                    "Return to the causal-ablation MLP and isolate the hidden neuron that carries the direct x3 bypass.\n"
+                    "Submit it as {\"solution_target\": [neuron_index]}."
+                )
+            else:
+                message = f"Task 3 graded. MSE={mse:.4f}, Score: {reward:.4f}"
+
+            return message, reward, done
+
+        gt = self.ground_truths["task4"]
+        raw_reward = _score_task4_raw(submission, gt)
+        reward = _clamp_task_score(raw_reward)
         if submission == gt:
             done = True
-            message = f"Task 3 graded. MSE={mse:.4f}, Score: {reward:.4f}\n\nAll tasks completed!"
+            message = (
+                f"Task 4 graded. Score: {reward:.2f}\n\n"
+                "All four tasks completed!"
+            )
+        elif gt[0] in submission:
+            message = (
+                f"Task 4 graded. Partial credit: {reward:.2f}\n"
+                "You included the correct additive bypass neuron along with extra candidates. "
+                "Submit the single hidden-neuron index for full credit."
+            )
         else:
-            message = f"Task 3 graded. MSE={mse:.4f}, Score: {reward:.4f}"
-
+            message = (
+                f"Task 4 incorrect. Score: {reward:.2f}\n"
+                "Submit the single hidden-neuron index that directly carries x3 through the hidden layer."
+            )
         return message, reward, done
 
     def get_metadata(self) -> EnvironmentMetadata:
         return EnvironmentMetadata(
             name="mech_interp",
             description=(
-                "PyTorchSandbox mechanistic interpretability benchmark with three graded tasks. "
+                "PyTorchSandbox mechanistic interpretability benchmark with four graded tasks. "
                 "Each task exposes a rubric-backed grader and reports scores strictly within (0, 1)."
             ),
             readme_content=_read_readme(self.base_dir),

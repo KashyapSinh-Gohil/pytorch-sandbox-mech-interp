@@ -100,21 +100,23 @@ async def health_check():
 @app.get("/info")
 async def environment_info():
     """Describe the curriculum at a high level without leaking task answers."""
+    tasks = get_task_catalog()
     return {
         "env_name": "mech_interp",
-        "task_count": 3,
-        "tasks": get_task_catalog(),
+        "task_count": len(tasks),
+        "tasks": tasks,
     }
 
 
 @app.get("/tasks")
 async def task_manifest():
-    """Return an explicit 3-task / 3-grader manifest for validators and clients."""
+    """Return an explicit task manifest for validators and clients."""
+    tasks = get_task_catalog()
     return {
         "env_name": "mech_interp",
-        "task_count": 3,
-        "grader_count": 3,
-        "tasks": get_task_catalog(),
+        "task_count": len(tasks),
+        "grader_count": len(tasks),
+        "tasks": tasks,
     }
 
 

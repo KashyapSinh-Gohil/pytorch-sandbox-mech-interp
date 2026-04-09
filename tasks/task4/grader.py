@@ -1,4 +1,4 @@
-"""Task 3 manifest grader entrypoint."""
+"""Task 4 manifest grader entrypoint."""
 
 from pathlib import Path
 import sys
@@ -15,11 +15,12 @@ def grade(action, observation=None) -> float:
     if error_message is not None or submission is None:
         return 0.01
 
-    ground_truth = get_task_ground_truth("task3")
+    ground_truth = get_task_ground_truth("task4")
 
-    if len(submission) != len(ground_truth):
-        return 0.01
-
-    mse = sum((candidate - expected) ** 2 for candidate, expected in zip(sorted(submission), ground_truth)) / len(ground_truth)
-    raw_score = max(0.0, 1.0 - mse)
+    if submission == ground_truth:
+        raw_score = 1.0
+    elif ground_truth[0] in submission:
+        raw_score = max(0.1, 0.8 / len(submission))
+    else:
+        raw_score = 0.0
     return clamp_task_score(raw_score)

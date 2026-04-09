@@ -64,7 +64,7 @@ class MechInterpObservation(ObservationBase):
     """Environment observation returned after each step."""
 
     stdout_or_error: str = Field(default="", description="Captured stdout/stderr from code execution or grading feedback.")
-    task_level: int = Field(default=1, description="Current task level (1, 2, or 3).")
+    task_level: int = Field(default=1, description="Current task level (1, 2, 3, or 4).")
     model_config = ConfigDict(extra="forbid")
 
 
