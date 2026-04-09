@@ -4,12 +4,15 @@ import os
 import subprocess
 import sys
 import tempfile
+from pathlib import Path
 from uuid import uuid4
-from typing import Callable, Optional
+from typing import Any, Callable, Optional
 
 import torch
 import torch.nn as nn
 from openenv.core.env_server.interfaces import Environment
+from openenv.core.env_server.types import EnvironmentMetadata
+from openenv.core.rubrics import Rubric
 
 from . import model_architectures
 
@@ -23,6 +26,8 @@ except ImportError:
 EXEC_TIMEOUT = 30
 MAX_EPISODE_STEPS = 30
 TASK3_NUM_FREQUENCIES = 5
+MIN_TASK_SCORE = 0.01
+MAX_TASK_SCORE = 0.99
 
 SAFE_BUILTINS = {
     "abs": abs,
@@ -53,6 +58,30 @@ SAFE_BUILTINS = {
     "tuple": tuple,
     "type": type,
     "zip": zip,
+}
+
+TASK_SPECS = {
+    "task1": {
+        "id": "task1",
+        "level": 1,
+        "name": "Dead Neuron Detection",
+        "description": "Find all zero-weight input indices in the Linear(10,1) model.",
+        "grader_name": "dead_neuron_detection_grader",
+    },
+    "task2": {
+        "id": "task2",
+        "level": 2,
+        "name": "Causal Ablation",
+        "description": "Identify the hidden neuron responsible for the multiplicative circuit.",
+        "grader_name": "causal_ablation_grader",
+    },
+    "task3": {
+        "id": "task3",
+        "level": 3,
+        "name": "Fourier Analysis",
+        "description": "Recover the planted frequencies from the embedding spectrum.",
+        "grader_name": "fourier_frequency_recovery_grader",
+    },
 }
 
 EXEC_RUNNER = """
@@ -262,6 +291,138 @@ def _normalize_submission(raw_submission: object) -> tuple[Optional[list[int]], 
     return normalized, None
 
 
+def _clamp_task_score(score: float) -> float:
+    """Map any raw task score into the validator-safe open interval (0, 1)."""
+    return round(min(MAX_TASK_SCORE, max(MIN_TASK_SCORE, float(score))), 4)
+
+
+def _score_task1_raw(submission: list[int], ground_truth: list[int]) -> float:
+    gt_set = set(ground_truth)
+    submission_set = set(submission)
+    matches = len(submission_set & gt_set)
+    false_positives = len(submission_set - gt_set)
+
+    if submission == ground_truth:
+        return 1.0
+
+    return max(0.0, (matches / len(ground_truth)) * 0.33 - (false_positives * 0.1))
+
+
+def _score_task2_raw(submission: list[int], ground_truth: list[int]) -> float:
+    return 1.0 if submission == ground_truth else 0.0
+
+
+def _task3_mse(submission: list[int], ground_truth: list[int]) -> Optional[float]:
+    if len(submission) != len(ground_truth):
+        return None
+
+    return sum((candidate - expected) ** 2 for candidate, expected in zip(sorted(submission), ground_truth)) / len(ground_truth)
+
+
+def _score_task3_raw(submission: list[int], ground_truth: list[int]) -> float:
+    mse = _task3_mse(submission, ground_truth)
+    if mse is None:
+        return 0.0
+    return max(0.0, 1.0 - mse)
+
+
+def _task_key_for_level(task_level: int) -> str:
+    return f"task{task_level}"
+
+
+def _task_metadata(task_level: int) -> dict[str, Any]:
+    spec = TASK_SPECS[_task_key_for_level(task_level)]
+    return {
+        "task_id": spec["id"],
+        "task_level": spec["level"],
+        "task_name": spec["name"],
+        "grader_name": spec["grader_name"],
+    }
+
+
+def get_task_catalog() -> list[dict[str, Any]]:
+    """Return a validator-friendly public task manifest."""
+    return [
+        {
+            "id": spec["id"],
+            "level": spec["level"],
+            "name": spec["name"],
+            "description": spec["description"],
+            "grader": {
+                "name": spec["grader_name"],
+                "score_range": {"min_exclusive": 0.0, "max_exclusive": 1.0},
+            },
+        }
+        for spec in TASK_SPECS.values()
+    ]
+
+
+def _read_readme(base_dir: str) -> Optional[str]:
+    readme_path = Path(base_dir) / "README.md"
+    if not readme_path.exists():
+        return None
+    return readme_path.read_text(encoding="utf-8")
+
+
+class Task1Rubric(Rubric):
+    def __init__(self, ground_truth: list[int]):
+        super().__init__()
+        self.ground_truth = list(ground_truth)
+        self.last_score = 0.5
+
+    def forward(self, action: Any, observation: Any) -> float:
+        submission, error_message = _normalize_submission(getattr(action, "solution_target", None))
+        if error_message is not None or submission is None:
+            return MIN_TASK_SCORE
+        return _clamp_task_score(_score_task1_raw(submission, self.ground_truth))
+
+
+class Task2Rubric(Rubric):
+    def __init__(self, ground_truth: list[int]):
+        super().__init__()
+        self.ground_truth = list(ground_truth)
+        self.last_score = 0.5
+
+    def forward(self, action: Any, observation: Any) -> float:
+        submission, error_message = _normalize_submission(getattr(action, "solution_target", None))
+        if error_message is not None or submission is None:
+            return MIN_TASK_SCORE
+        return _clamp_task_score(_score_task2_raw(submission, self.ground_truth))
+
+
+class Task3Rubric(Rubric):
+    def __init__(self, ground_truth: list[int]):
+        super().__init__()
+        self.ground_truth = list(ground_truth)
+        self.last_score = 0.5
+
+    def forward(self, action: Any, observation: Any) -> float:
+        submission, error_message = _normalize_submission(getattr(action, "solution_target", None))
+        if error_message is not None or submission is None:
+            return MIN_TASK_SCORE
+        return _clamp_task_score(_score_task3_raw(submission, self.ground_truth))
+
+
+class CurriculumRubric(Rubric):
+    def __init__(self, ground_truths: dict[str, list[int]]):
+        super().__init__()
+        self.task1 = Task1Rubric(ground_truths["task1"])
+        self.task2 = Task2Rubric(ground_truths["task2"])
+        self.task3 = Task3Rubric(ground_truths["task3"])
+        self.last_score = 0.5
+
+    def forward(self, action: Any, observation: Any) -> float:
+        metadata = getattr(observation, "metadata", {}) or {}
+        task_id = metadata.get("task_id", "task1")
+        rubric = getattr(self, task_id, self.task1)
+        return rubric(action, observation)
+
+    def reset(self) -> None:
+        self.last_score = 0.5
+        for _name, rubric in self.named_children():
+            rubric.last_score = 0.5
+
+
 class MechInterpEnvironment(Environment):
     SUPPORTS_CONCURRENT_SESSIONS: bool = True
 
@@ -288,12 +449,22 @@ class MechInterpEnvironment(Environment):
             "task2": _infer_task2_ground_truth(self.task2_model),
             "task3": _infer_task3_ground_truth(self.task3_model),
         }
+        super().__init__(rubric=CurriculumRubric(self.ground_truths))
 
         self._state = InterpState(episode_id=str(uuid4()), step_count=0, task_level=1)
         self.task_level = 1
 
-    def reset(self) -> MechInterpObservation:
-        self._state = InterpState(episode_id=str(uuid4()), step_count=0, task_level=1)
+    def reset(
+        self,
+        seed: Optional[int] = None,
+        episode_id: Optional[str] = None,
+        **kwargs: Any,
+    ) -> MechInterpObservation:
+        if seed is not None:
+            self.seed = _coerce_seed(seed)
+
+        self._reset_rubric()
+        self._state = InterpState(episode_id=episode_id or str(uuid4()), step_count=0, task_level=1)
         self.task_level = 1
 
         return MechInterpObservation(
@@ -307,10 +478,12 @@ class MechInterpEnvironment(Environment):
             task_level=1,
             done=False,
             reward=0.0,
+            metadata={**_task_metadata(1), "seed": self.seed, "step": 0},
         )
 
     def step(self, action: MechInterpAction) -> MechInterpObservation:
         self._state.step_count += 1
+        active_task_level = self.task_level
 
         if self._state.step_count > MAX_EPISODE_STEPS:
             return MechInterpObservation(
@@ -336,18 +509,28 @@ class MechInterpEnvironment(Environment):
             submission, error_message = _normalize_submission(action.solution_target)
             if error_message is not None:
                 stdout_or_error = error_message
+                reward = MIN_TASK_SCORE
             else:
                 stdout_or_error, reward, done = self._grade_solution(submission or [])
         else:
             stdout_or_error = "No action provided. Please submit either python_code or solution_target."
 
-        return MechInterpObservation(
+        metadata = {
+            **_task_metadata(active_task_level),
+            "seed": self.seed,
+            "step": self._state.step_count,
+            "current_task_level": self.task_level,
+        }
+        observation = MechInterpObservation(
             stdout_or_error=stdout_or_error,
             task_level=self.task_level,
             done=done,
             reward=reward,
-            metadata={"seed": self.seed, "step": self._state.step_count},
+            metadata=metadata,
         )
+        if has_solution:
+            self._apply_rubric(action, observation)
+        return observation
 
     def _current_model(self) -> nn.Module:
         if self.task_level == 1:
@@ -399,18 +582,10 @@ class MechInterpEnvironment(Environment):
 
         if self.task_level == 1:
             gt = self.ground_truths["task1"]
-            gt_set = set(gt)
-            submission_set = set(submission)
-            matches = len(submission_set & gt_set)
-            false_positives = len(submission_set - gt_set)
-
-            if submission == gt:
-                reward = 1.0
-            else:
-                reward = round(max(0.0, (matches / len(gt)) * 0.33 - (false_positives * 0.1)), 2)
+            reward = _clamp_task_score(_score_task1_raw(submission, gt))
 
             message = f"Task 1 graded. Score: {reward:.2f}"
-            if reward >= 0.99:
+            if submission == gt:
                 self.task_level = 2
                 self._state.task_level = 2
                 message += (
@@ -423,20 +598,20 @@ class MechInterpEnvironment(Environment):
         if self.task_level == 2:
             gt = self.ground_truths["task2"]
             if submission == gt:
-                reward = 1.0
+                reward = MAX_TASK_SCORE
                 self.task_level = 3
                 self._state.task_level = 3
                 message = (
-                    "Task 2 graded. Maximum reward attained.\n\n"
+                    f"Task 2 graded. Score: {reward:.2f}\n\n"
                     "Moving to Task 3: Fourier Analysis of Planted Features.\n"
                     "Analyze model.W_E.weight across the 97 token positions and submit the 5 dominant "
                     "frequency indices as {\"solution_target\": [f1, f2, f3, f4, f5]}."
                 )
             else:
-                reward = 0.0
+                reward = MIN_TASK_SCORE
                 message = (
-                    "Task 2 incorrect. Submit the single hidden-neuron index responsible for the "
-                    "multiplicative circuit."
+                    f"Task 2 incorrect. Score: {reward:.2f}\n"
+                    "Submit the single hidden-neuron index responsible for the multiplicative circuit."
                 )
             return message, reward, done
 
@@ -444,20 +619,33 @@ class MechInterpEnvironment(Environment):
         if len(submission) != len(gt):
             return (
                 f"Task 3 failed. Expected exactly {len(gt)} frequency indices, got {len(submission)}.",
-                0.0,
+                MIN_TASK_SCORE,
                 False,
             )
 
-        mse = sum((candidate - expected) ** 2 for candidate, expected in zip(sorted(submission), gt)) / len(gt)
-        reward = round(max(0.0, 1.0 - mse), 4)
+        mse = _task3_mse(submission, gt) or 0.0
+        reward = _clamp_task_score(_score_task3_raw(submission, gt))
 
-        if reward >= 0.99:
+        if submission == gt:
             done = True
             message = f"Task 3 graded. MSE={mse:.4f}, Score: {reward:.4f}\n\nAll tasks completed!"
         else:
             message = f"Task 3 graded. MSE={mse:.4f}, Score: {reward:.4f}"
 
         return message, reward, done
+
+    def get_metadata(self) -> EnvironmentMetadata:
+        return EnvironmentMetadata(
+            name="mech_interp",
+            description=(
+                "PyTorchSandbox mechanistic interpretability benchmark with three graded tasks. "
+                "Each task exposes a rubric-backed grader and reports scores strictly within (0, 1)."
+            ),
+            readme_content=_read_readme(self.base_dir),
+            version="0.1.0",
+            author="Kashyapsinh Gohil",
+            documentation_url="https://github.com/KashyapSinh-Gohil/pytorch-sandbox-mech-interp",
+        )
 
     @property
     def state(self) -> InterpState:
