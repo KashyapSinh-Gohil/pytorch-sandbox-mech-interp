@@ -1,6 +1,12 @@
 """Top-level grader router for validators that expect a single grader entrypoint."""
 
+from pathlib import Path
+import sys
 from typing import Any
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 from tasks.task1.grader import grade as grade_task1
 from tasks.task2.grader import grade as grade_task2
