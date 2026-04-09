@@ -8,7 +8,8 @@
 
 import json
 import logging
-from typing import Optional, Callable
+from threading import Lock
+from typing import Any, Optional, Callable
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 
@@ -21,28 +22,85 @@ except Exception as e:
 
 try:
     from ..models import MechInterpAction, MechInterpObservation
-    from .mech_interp_environment import MechInterpEnvironment, get_task_catalog
+    from .mech_interp_environment import (
+        MechInterpEnvironment,
+        get_task_catalog,
+        resolve_task_selection,
+    )
 except (ImportError, ModuleNotFoundError):
     from models import MechInterpAction, MechInterpObservation
-    from server.mech_interp_environment import MechInterpEnvironment, get_task_catalog
+    from server.mech_interp_environment import (
+        MechInterpEnvironment,
+        get_task_catalog,
+        resolve_task_selection,
+    )
 
 logger = logging.getLogger(__name__)
 
+_TASK_ID_COOKIE = "mech_interp_task_id"
+_TASK_LEVEL_COOKIE = "mech_interp_task_level"
+_HTTP_TASK_SELECTION = resolve_task_selection()
+_HTTP_TASK_SELECTION_LOCK = Lock()
+
+
+def _set_http_task_selection(selection: dict[str, Any]) -> None:
+    with _HTTP_TASK_SELECTION_LOCK:
+        _HTTP_TASK_SELECTION.update(selection)
+
+
+def _get_http_task_selection() -> dict[str, Any]:
+    with _HTTP_TASK_SELECTION_LOCK:
+        return dict(_HTTP_TASK_SELECTION)
+
+
+def _extract_task_selection(data: Any) -> Optional[dict[str, Any]]:
+    if not isinstance(data, dict):
+        return None
+
+    action = data.get("action") if isinstance(data.get("action"), dict) else {}
+    metadata = action.get("metadata") if isinstance(action.get("metadata"), dict) else {}
+
+    task_id = data.get("task_id", metadata.get("task_id"))
+    task_level = data.get("task_level", metadata.get("task_level"))
+    if task_id is None and task_level is None:
+        return None
+
+    return resolve_task_selection(task_id=task_id, task_level=task_level)
+
+
+def _selection_from_request(request: Request) -> Optional[dict[str, Any]]:
+    task_id = request.cookies.get(_TASK_ID_COOKIE)
+    task_level = request.cookies.get(_TASK_LEVEL_COOKIE)
+    if task_id is None and task_level is None:
+        return None
+    return resolve_task_selection(task_id=task_id, task_level=task_level)
+
 
 class JSONStringParserMiddleware(BaseHTTPMiddleware):
-    """Middleware to parse JSON strings in solution_target field."""
+    """Normalize task-aware HTTP payloads for stateless validator requests."""
 
     async def dispatch(self, request: Request, call_next):
-        if request.method == "POST" and request.url.path == "/step":
+        if request.method == "POST" and request.url.path in {"/reset", "/step"}:
             try:
                 body = await request.body()
                 data = json.loads(body.decode("utf-8")) if body else {}
+                if not isinstance(data, dict):
+                    data = {}
 
-                candidate_actions = []
-                if isinstance(data, dict):
-                    candidate_actions.append(data)
-                    if isinstance(data.get("action"), dict):
-                        candidate_actions.append(data["action"])
+                selection = _extract_task_selection(data)
+                if request.url.path == "/reset":
+                    selection = selection or resolve_task_selection()
+                else:
+                    selection = (
+                        selection
+                        or _selection_from_request(request)
+                        or _get_http_task_selection()
+                    )
+                    data.update(selection)
+
+                candidate_actions = [data]
+                if isinstance(data.get("action"), dict):
+                    candidate_actions.append(data["action"])
 
                 for action in candidate_actions:
                     if "solution_target" in action and isinstance(action["solution_target"], str):
@@ -58,16 +116,32 @@ class JSONStringParserMiddleware(BaseHTTPMiddleware):
                         except (json.JSONDecodeError, TypeError) as exc:
                             logger.warning("Failed to parse solution_target JSON string: %s", exc)
 
+                if selection is not None:
+                    data.update(selection)
+                    _set_http_task_selection(selection)
+
+                updated_body = json.dumps(data).encode("utf-8")
+
                 async def receive():
                     return {
                         "type": "http.request",
-                        "body": json.dumps(data).encode("utf-8"),
+                        "body": updated_body,
                         "more_body": False,
                     }
 
+                request._body = updated_body
                 request._receive = receive
+                response = await call_next(request)
+                if selection is not None:
+                    response.set_cookie(_TASK_ID_COOKIE, str(selection["task_id"]))
+                    response.set_cookie(_TASK_LEVEL_COOKIE, str(selection["task_level"]))
+                return response
             except Exception as exc:
-                logger.warning("Failed to preprocess /step request body: %s", exc)
+                logger.warning(
+                    "Failed to preprocess %s request body: %s",
+                    request.url.path,
+                    exc,
+                )
 
         return await call_next(request)
 

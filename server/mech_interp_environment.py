@@ -494,6 +494,17 @@ def _resolve_task_key(task_id: Any = None, task_level: Any = None) -> str:
     return "task1"
 
 
+def resolve_task_selection(task_id: Any = None, task_level: Any = None) -> dict[str, Any]:
+    """Return the canonical task identifier and level for a task selection hint."""
+    task_key = _resolve_task_key(task_id=task_id, task_level=task_level)
+    spec = TASK_SPECS[task_key]
+    return {
+        "task_id": spec["id"],
+        "task_level": spec["level"],
+        "task_name": spec["name"],
+    }
+
+
 def _task_metadata(task_level: int) -> dict[str, Any]:
     spec = TASK_SPECS[_task_key_for_level(task_level)]
     return {
@@ -706,7 +717,18 @@ class MechInterpEnvironment(Environment):
             metadata={**_task_metadata(task_spec["level"]), "seed": self.seed, "step": 0},
         )
 
-    def step(self, action: MechInterpAction) -> MechInterpObservation:
+    def step(
+        self,
+        action: MechInterpAction,
+        task_id: Any = None,
+        task_level: Any = None,
+        **_: Any,
+    ) -> MechInterpObservation:
+        if task_id is not None or task_level is not None:
+            selection = resolve_task_selection(task_id=task_id, task_level=task_level)
+            self.task_level = int(selection["task_level"])
+            self._state.task_level = self.task_level
+
         self._state.step_count += 1
         active_task_level = self.task_level
 

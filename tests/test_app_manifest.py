@@ -10,6 +10,7 @@ import yaml
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from server.app import app
+from tasks.graders import grade_task
 
 
 class TestAppManifest(unittest.TestCase):
@@ -40,6 +41,76 @@ class TestAppManifest(unittest.TestCase):
         )
         reset_payloads = [task["reset_payload"]["task_id"] for task in payload["tasks"]]
         self.assertEqual(reset_payloads, ["task1", "task2", "task3", "task4"])
+
+    def test_step_uses_last_reset_task_for_stateless_http_calls(self):
+        reset_response = self.client.post("/reset", json={"task_id": "task4"})
+        self.assertEqual(reset_response.status_code, 200)
+        self.assertEqual(reset_response.json()["observation"]["task_level"], 4)
+
+        step_response = self.client.post("/step", json={"action": {"solution_target": [3]}})
+        self.assertEqual(step_response.status_code, 200)
+
+        payload = step_response.json()
+        self.assertEqual(payload["reward"], 0.99)
+        self.assertTrue(payload["done"])
+        self.assertIn("Task 4 graded", payload["observation"]["stdout_or_error"])
+        self.assertEqual(payload["observation"]["task_level"], 4)
+        self.assertEqual(grade_task({"solution_target": [3]}, payload["observation"]), 0.99)
+
+    def test_step_accepts_direct_task_selection_without_prior_reset(self):
+        response = self.client.post(
+            "/step",
+            json={"task_id": "task2", "action": {"solution_target": [2]}},
+        )
+        self.assertEqual(response.status_code, 200)
+
+        payload = response.json()
+        self.assertEqual(payload["reward"], 0.99)
+        self.assertFalse(payload["done"])
+        self.assertIn("Task 2 graded", payload["observation"]["stdout_or_error"])
+        self.assertEqual(payload["observation"]["task_level"], 3)
+        self.assertEqual(grade_task({"solution_target": [2]}, payload["observation"]), 0.99)
+
+    def test_step_falls_back_to_server_task_selection_without_client_cookies(self):
+        reset_response = self.client.post("/reset", json={"task_id": "task3"})
+        self.assertEqual(reset_response.status_code, 200)
+
+        fresh_client = TestClient(app)
+        step_response = fresh_client.post(
+            "/step",
+            json={"action": {"solution_target": [2, 17, 23, 44, 47]}},
+        )
+        self.assertEqual(step_response.status_code, 200)
+
+        payload = step_response.json()
+        self.assertEqual(payload["reward"], 0.99)
+        self.assertFalse(payload["done"])
+        self.assertIn("Task 3 graded", payload["observation"]["stdout_or_error"])
+        self.assertEqual(payload["observation"]["task_level"], 4)
+        self.assertEqual(
+            grade_task({"solution_target": [2, 17, 23, 44, 47]}, payload["observation"]),
+            0.99,
+        )
+
+    def test_top_level_router_grades_all_http_task_observations(self):
+        cases = [
+            ("task1", [2, 5, 8]),
+            ("task2", [2]),
+            ("task3", [2, 17, 23, 44, 47]),
+            ("task4", [3]),
+        ]
+
+        for task_id, submission in cases:
+            response = self.client.post(
+                "/step",
+                json={"task_id": task_id, "action": {"solution_target": submission}},
+            )
+            self.assertEqual(response.status_code, 200)
+            payload = response.json()
+            self.assertEqual(
+                grade_task({"solution_target": submission}, payload["observation"]),
+                0.99,
+            )
 
     def test_metadata_mentions_four_graded_tasks(self):
         response = self.client.get("/metadata")
