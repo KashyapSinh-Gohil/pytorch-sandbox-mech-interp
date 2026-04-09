@@ -105,16 +105,6 @@ For hackathon submissions, do not override the injected `API_BASE_URL` / `API_KE
 - **Task 3**: Score is based on mean-squared error against the planted frequencies
 - **Final Score**: Average of all 3 tasks
 
-### Explicit Task Graders
-
-The environment publishes three explicit graded tasks, each with its own grader:
-
-- `task1` -> `dead_neuron_detection_grader`
-- `task2` -> `causal_ablation_grader`
-- `task3` -> `fourier_frequency_recovery_grader`
-
-You can inspect the structured task manifest at `GET /tasks` or `GET /info`.
-
 ---
 
 ## Determinism
