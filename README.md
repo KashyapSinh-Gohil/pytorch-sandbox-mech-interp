@@ -49,8 +49,8 @@ from mech_interp import MechInterpAction, MechInterpEnv
 
 async def main() -> None:
     client = OpenAI(
-        base_url="https://router.huggingface.co/v1",
-        api_key=os.getenv("HF_TOKEN"),
+        base_url=os.getenv("API_BASE_URL", "https://router.huggingface.co/v1"),
+        api_key=os.getenv("API_KEY", os.getenv("HF_TOKEN")),
     )
     model_name = "deepseek-ai/DeepSeek-V3-0324"
 
@@ -75,11 +75,14 @@ Configure the inference script with these variables:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `HF_TOKEN` | HuggingFace API token | Required |
-| `API_BASE_URL` | LLM API endpoint | `https://router.huggingface.co/v1` |
+| `API_KEY` | Validator-injected LLM proxy key | Required for hackathon submission |
+| `HF_TOKEN` | Optional local HuggingFace token fallback | Unset |
+| `API_BASE_URL` | LLM API endpoint or validator proxy URL | `https://router.huggingface.co/v1` |
 | `MODEL_NAME` | Model to use for inference | `deepseek-ai/DeepSeek-V3-0324` |
 | `ENV_URL` | Environment server URL | Space URL |
 | `LOCAL_IMAGE_NAME` | Optional local Docker image for `from_docker_image()` runs | Unset |
+
+For hackathon submissions, do not override the injected `API_BASE_URL` / `API_KEY` pair with your own provider settings.
 
 ---
 
