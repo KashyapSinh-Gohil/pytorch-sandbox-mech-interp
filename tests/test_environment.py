@@ -16,7 +16,7 @@ class TestMechInterpEnvironment(unittest.TestCase):
         self.assertEqual(obs.task_level, 1)
         self.assertIn("Task 1", obs.stdout_or_error)
         self.assertNotIn(str(self.env.ground_truths["task1"]), obs.stdout_or_error)
-        self.assertEqual(obs.reward, 0.0)
+        self.assertEqual(obs.reward, MIN_TASK_SCORE)
         self.assertFalse(obs.done)
 
     def test_code_execution_updates_observation(self):
@@ -24,6 +24,7 @@ class TestMechInterpEnvironment(unittest.TestCase):
         action = MechInterpAction(python_code="print('hello test')")
         obs = self.env.step(action)
         self.assertIn("hello test", obs.stdout_or_error.strip())
+        self.assertEqual(obs.reward, MIN_TASK_SCORE)
 
     def test_task1_grading_logic(self):
         self.env.reset()

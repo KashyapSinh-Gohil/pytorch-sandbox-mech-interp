@@ -129,7 +129,7 @@ class TestEndToEndIntegration(unittest.TestCase):
         self.assertIn("model=", start_log)
         
         # [STEP] format
-        step_log = "[STEP] step=1 action=python_code reward=0.00 done=false error=null"
+        step_log = "[STEP] step=1 action=python_code reward=0.01 done=false error=null"
         self.assertIn("[STEP]", step_log)
         self.assertIn("step=", step_log)
         self.assertIn("reward=", step_log)

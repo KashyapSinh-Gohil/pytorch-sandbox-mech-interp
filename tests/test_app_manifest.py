@@ -1,4 +1,5 @@
 import importlib
+import json
 import os
 import sys
 import unittest
@@ -80,6 +81,16 @@ class TestAppManifest(unittest.TestCase):
         top_module = importlib.import_module(manifest["grader"]["module"])
         top_grader = getattr(top_module, manifest["grader"]["function"])
         self.assertTrue(callable(top_grader))
+
+    def test_static_tasks_json_matches_three_task_shape(self):
+        manifest_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tasks.json")
+        with open(manifest_path, "r", encoding="utf-8") as handle:
+            manifest = json.load(handle)
+
+        self.assertEqual(manifest["task_count"], 3)
+        self.assertEqual(manifest["grader_count"], 3)
+        self.assertEqual(len(manifest["tasks"]), 3)
+        self.assertTrue(all(task["has_grader"] for task in manifest["tasks"]))
 
 
 if __name__ == "__main__":

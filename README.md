@@ -31,6 +31,8 @@ This environment evaluates whether an agent can inspect neural-network internals
 - Task 2: `tasks.task2.grader:grade`
 - Task 3: `tasks.task3.grader:grade`
 - Top-level router: `tasks.graders:grade_task`
+- Static registry: `tasks.json`
+- Python registry: `tasks.TASKS`
 
 ## Actions
 
@@ -62,6 +64,7 @@ python inference.py
 - `79/79` local tests passing
 - `openenv validate` passes
 - Live Space endpoints verified: `/health`, `/reset`, `/tasks`
+- Validator-facing task rewards are clamped strictly inside `(0, 1)`
 
 ## Baseline
 

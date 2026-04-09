@@ -1,0 +1,56 @@
+{
+  "final_submission_note": "FINAL: explicit validator-facing task registry with 3 tasks and 3 grader entrypoints.",
+  "task_count": 3,
+  "grader_count": 3,
+  "tasks": [
+    {
+      "id": "task1",
+      "level": 1,
+      "name": "Dead Neuron Detection",
+      "has_grader": true,
+      "grader": {
+        "name": "dead_neuron_detection_grader",
+        "module": "tasks.task1.grader",
+        "function": "grade",
+        "score_range": {
+          "min_exclusive": 0.0,
+          "max_exclusive": 1.0
+        }
+      }
+    },
+    {
+      "id": "task2",
+      "level": 2,
+      "name": "Causal Ablation",
+      "has_grader": true,
+      "grader": {
+        "name": "causal_ablation_grader",
+        "module": "tasks.task2.grader",
+        "function": "grade",
+        "score_range": {
+          "min_exclusive": 0.0,
+          "max_exclusive": 1.0
+        }
+      }
+    },
+    {
+      "id": "task3",
+      "level": 3,
+      "name": "Fourier Analysis",
+      "has_grader": true,
+      "grader": {
+        "name": "fourier_frequency_recovery_grader",
+        "module": "tasks.task3.grader",
+        "function": "grade",
+        "score_range": {
+          "min_exclusive": 0.0,
+          "max_exclusive": 1.0
+        }
+      }
+    }
+  ],
+  "top_level_grader": {
+    "module": "tasks.graders",
+    "function": "grade_task"
+  }
+}

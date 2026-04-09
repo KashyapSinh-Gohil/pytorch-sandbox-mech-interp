@@ -37,6 +37,9 @@ except ImportError:
     from models import InterpState, MechInterpAction, MechInterpObservation
 
 
+DEFAULT_CLIENT_REWARD = 0.01
+
+
 class MechInterpEnv(
     EnvClient[MechInterpAction, MechInterpObservation, InterpState]
 ):
@@ -92,13 +95,13 @@ class MechInterpEnv(
             stdout_or_error=obs_data.get("stdout_or_error", ""),
             task_level=obs_data.get("task_level", 1),
             done=payload.get("done", False),
-            reward=payload.get("reward", 0.0),
+            reward=payload.get("reward", DEFAULT_CLIENT_REWARD),
             metadata=obs_data.get("metadata", {}),
         )
 
         return StepResult(
             observation=observation,
-            reward=payload.get("reward", 0.0),
+            reward=payload.get("reward", DEFAULT_CLIENT_REWARD),
             done=payload.get("done", False),
         )
 

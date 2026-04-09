@@ -165,7 +165,7 @@ async def main() -> None:
     rewards: List[float] = []
     steps_taken = 0
     success = False
-    score = 0.0
+    score = MIN_TASK_SCORE
     task_scores = {1: MIN_TASK_SCORE, 2: MIN_TASK_SCORE, 3: MIN_TASK_SCORE}
 
     log_start(task=TASK_NAME, env=BENCHMARK, model=MODEL_NAME)
@@ -193,8 +193,8 @@ async def main() -> None:
                 llm_output = await call_llm_with_retry(client, messages, MODEL_NAME)
             except Exception as e:
                 error_msg = f"LLM API error after {MAX_RETRIES} retries: {e}"
-                log_step(step, "api_error", 0.0, False, error_msg)
-                rewards.append(0.0)
+                log_step(step, "api_error", MIN_TASK_SCORE, False, error_msg)
+                rewards.append(MIN_TASK_SCORE)
                 steps_taken = step
                 break
 
@@ -228,13 +228,13 @@ async def main() -> None:
             prev_task = obs.task_level
             result = await env.step(action)
             obs = result.observation
-            reward = result.reward if result.reward is not None else 0.0
+            reward = result.reward if result.reward is not None else MIN_TASK_SCORE
             rewards.append(reward)
             steps_taken = step
 
             log_step(step, action_label, reward, obs.done, None)
 
-            if action.solution_target is not None and reward > task_scores.get(prev_task, 0.0):
+            if action.solution_target is not None and reward > task_scores.get(prev_task, MIN_TASK_SCORE):
                 task_scores[prev_task] = reward
 
             if parsed is not None and action_label not in ("parse_error_retry", "schema_error_retry"):
@@ -261,8 +261,8 @@ async def main() -> None:
         success = score > 0.9
 
     except Exception as e:
-        log_step(steps_taken + 1, "fatal_error", 0.0, True, str(e))
-        rewards.append(0.0)
+        log_step(steps_taken + 1, "fatal_error", MIN_TASK_SCORE, True, str(e))
+        rewards.append(MIN_TASK_SCORE)
         steps_taken += 1
 
     finally:

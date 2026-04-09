@@ -544,7 +544,7 @@ class MechInterpEnvironment(Environment):
             ),
             task_level=1,
             done=False,
-            reward=0.0,
+            reward=MIN_TASK_SCORE,
             metadata={**_task_metadata(1), "seed": self.seed, "step": 0},
         )
 
@@ -557,7 +557,7 @@ class MechInterpEnvironment(Environment):
                 stdout_or_error=f"Episode ended. Max steps ({MAX_EPISODE_STEPS}) reached.",
                 task_level=self.task_level,
                 done=True,
-                reward=0.0,
+                reward=MIN_TASK_SCORE,
                 metadata={"reason": "max_steps_reached", "seed": self.seed, "step": self._state.step_count},
             )
 
@@ -565,7 +565,7 @@ class MechInterpEnvironment(Environment):
         has_solution = action.solution_target is not None
 
         stdout_or_error = ""
-        reward = 0.0
+        reward = MIN_TASK_SCORE
         done = False
 
         if has_code and has_solution:
