@@ -15,6 +15,10 @@ license: bsd-3-clause
 
 Minimal OpenEnv benchmark for mechanistic interpretability.
 
+## Overview
+
+This environment evaluates whether an agent can inspect neural-network internals, execute PyTorch code, and submit graded answers across three tasks.
+
 ## Tasks
 
 1. Dead Neuron Detection
@@ -26,11 +30,37 @@ Minimal OpenEnv benchmark for mechanistic interpretability.
 - `{"python_code": "..."}`
 - `{"solution_target": [..]}`
 
+## Observation
+
+- `stdout_or_error`
+- `task_level`
+- `reward`
+- `done`
+
+## Setup
+
+```bash
+python3.11 -m venv .venv
+.venv/bin/pip install -e '.[dev]'
+```
+
 ## Run
 
 ```bash
 python inference.py
 ```
+
+## Validation
+
+- `79/79` local tests passing
+- `openenv validate` passes
+- Live Space endpoints verified: `/health`, `/reset`, `/tasks`
+
+## Baseline
+
+- Latest local smoke run started correctly and reached `score=0.337`
+- That run stopped early because the local Hugging Face Inference Provider credits were exhausted
+- During evaluation, the script is configured to prefer validator-injected `API_KEY` / `API_BASE_URL`
 
 ## Endpoints
 
