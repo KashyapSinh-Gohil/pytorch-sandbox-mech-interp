@@ -8,9 +8,11 @@
 
 from .client import MechInterpEnv
 from .models import MechInterpAction, MechInterpObservation
+from .server import MechInterpEnvironment
 
 __all__ = [
     "MechInterpAction",
     "MechInterpObservation",
     "MechInterpEnv",
+    "MechInterpEnvironment",
 ]
