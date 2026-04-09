@@ -1,0 +1,35 @@
+{
+  "final_submission_note": "FINAL: this repo contains 3 tasks and 3 grader entrypoints.",
+  "task_count": 3,
+  "grader_count": 3,
+  "tasks": [
+    {
+      "id": "task1",
+      "name": "Dead Neuron Detection",
+      "grader": {
+        "module": "tasks.task1.grader",
+        "function": "grade"
+      }
+    },
+    {
+      "id": "task2",
+      "name": "Causal Ablation",
+      "grader": {
+        "module": "tasks.task2.grader",
+        "function": "grade"
+      }
+    },
+    {
+      "id": "task3",
+      "name": "Fourier Analysis",
+      "grader": {
+        "module": "tasks.task3.grader",
+        "function": "grade"
+      }
+    }
+  ],
+  "top_level_grader": {
+    "module": "tasks.graders",
+    "function": "grade_task"
+  }
+}

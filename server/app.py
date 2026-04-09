@@ -109,10 +109,11 @@ async def environment_info():
 
 @app.get("/tasks")
 async def task_manifest():
-    """Return an explicit task/grader manifest for validators and clients."""
+    """Return an explicit 3-task / 3-grader manifest for validators and clients."""
     return {
         "env_name": "mech_interp",
         "task_count": 3,
+        "grader_count": 3,
         "tasks": get_task_catalog(),
     }
 

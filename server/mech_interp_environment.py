@@ -116,6 +116,8 @@ TASK_SPECS = {
         "name": "Dead Neuron Detection",
         "description": "Find all zero-weight input indices in the Linear(10,1) model.",
         "grader_name": "dead_neuron_detection_grader",
+        "grader_module": "tasks.task1.grader",
+        "grader_function": "grade",
     },
     "task2": {
         "id": "task2",
@@ -123,6 +125,8 @@ TASK_SPECS = {
         "name": "Causal Ablation",
         "description": "Identify the hidden neuron responsible for the multiplicative circuit.",
         "grader_name": "causal_ablation_grader",
+        "grader_module": "tasks.task2.grader",
+        "grader_function": "grade",
     },
     "task3": {
         "id": "task3",
@@ -130,6 +134,8 @@ TASK_SPECS = {
         "name": "Fourier Analysis",
         "description": "Recover the planted frequencies from the embedding spectrum.",
         "grader_name": "fourier_frequency_recovery_grader",
+        "grader_module": "tasks.task3.grader",
+        "grader_function": "grade",
     },
 }
 
@@ -399,15 +405,18 @@ def _task_metadata(task_level: int) -> dict[str, Any]:
 
 
 def get_task_catalog() -> list[dict[str, Any]]:
-    """Return a validator-friendly public task manifest."""
+    """Return a validator-friendly public task manifest with explicit grader paths."""
     return [
         {
             "id": spec["id"],
             "level": spec["level"],
             "name": spec["name"],
             "description": spec["description"],
+            "has_grader": True,
             "grader": {
                 "name": spec["grader_name"],
+                "module": spec["grader_module"],
+                "function": spec["grader_function"],
                 "score_range": {"min_exclusive": 0.0, "max_exclusive": 1.0},
             },
         }

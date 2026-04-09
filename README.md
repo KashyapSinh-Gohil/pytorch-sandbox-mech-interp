@@ -25,6 +25,13 @@ This environment evaluates whether an agent can inspect neural-network internals
 2. Causal Ablation
 3. Fourier Analysis
 
+## Graders
+
+- Task 1: `tasks.task1.grader:grade`
+- Task 2: `tasks.task2.grader:grade`
+- Task 3: `tasks.task3.grader:grade`
+- Top-level router: `tasks.graders:grade_task`
+
 ## Actions
 
 - `{"python_code": "..."}`

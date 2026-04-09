@@ -1,3 +1,4 @@
+# FINAL: explicit 3-task / 3-grader declaration for hackathon validation.
 version: "1.0"
 spec_version: 1
 openenv_version: "0.2.2"
@@ -17,26 +18,29 @@ max_episode_steps: 30
 environment: server.mech_interp_environment:MechInterpEnvironment
 tasks:
   - id: task1
-    name: easy
+    name: dead_neuron_detection
     title: Dead Neuron Detection
     description: Find all zero-weight input indices in the Linear(10,1) model.
     difficulty: easy
+    has_grader: true
     grader:
       module: tasks.task1.grader
       function: grade
   - id: task2
-    name: medium
+    name: causal_ablation
     title: Causal Ablation
     description: Identify the hidden neuron responsible for the multiplicative circuit.
     difficulty: medium
+    has_grader: true
     grader:
       module: tasks.task2.grader
       function: grade
   - id: task3
-    name: hard
+    name: fourier_analysis
     title: Fourier Analysis
     description: Recover the planted frequencies from the embedding spectrum.
     difficulty: hard
+    has_grader: true
     grader:
       module: tasks.task3.grader
       function: grade
