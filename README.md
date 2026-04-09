@@ -1,7 +1,7 @@
 ---
 title: PyTorchSandbox Mechanistic Interpretability
 emoji: 🔬
-colorFrom: teal
+colorFrom: blue
 colorTo: blue
 sdk: docker
 sdk_version: "0.2.2"
