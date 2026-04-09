@@ -103,6 +103,7 @@ For hackathon submissions, do not override the injected `API_BASE_URL` / `API_KE
 - **Task 1**: Exact match gives full credit; partial credit is available for partially correct sets
 - **Task 2**: Exact identification of the multiplication neuron
 - **Task 3**: Score is based on mean-squared error against the planted frequencies
+- **Validator-facing task scores**: Each task's grader reports a score strictly inside `(0, 1)` for compatibility with Phase 2 validation
 - **Final Score**: Average of all 3 tasks
 
 ---
@@ -116,7 +117,8 @@ The benchmark uses deterministic model artifacts. `OPENENV_SEED` is surfaced in 
 ## Health Checks
 
 - `GET /health` returns service health
-- `GET /info` returns a non-secret summary of the three tasks
+- `GET /info` returns a non-secret summary of the three tasks and their graders
+- `GET /tasks` returns the explicit task/grader manifest used by validators and clients
 
 ---
 
