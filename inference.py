@@ -4,20 +4,17 @@ import asyncio
 import json
 import os
 import re
+import sys
 from typing import List, Optional
 
-from openai import OpenAI
-
 API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
-MODEL_NAME = os.getenv("MODEL_NAME", "deepseek-ai/DeepSeek-V3-0324")
+MODEL_NAME = os.getenv("MODEL_NAME", "Qwen/Qwen2.5-72B-Instruct")
 HF_TOKEN = os.getenv("HF_TOKEN")
 LOCAL_IMAGE_NAME = os.getenv("LOCAL_IMAGE_NAME")
-
-ENV_URL = os.getenv("ENV_URL", "https://kashyapsinh-pytorch-sandbox-mech-interp.hf.space")
+ENV_URL = os.getenv("ENV_URL", "")
 TASK_NAME = "mech_interp_curriculum"
 BENCHMARK = "pytorch_sandbox"
 MAX_STEPS = 30
-
 MAX_RETRIES = 3
 RETRY_DELAY = 2
 MIN_TASK_SCORE = 0.01
@@ -41,9 +38,9 @@ def log_step(step: int, action: str, reward: float, done: bool, error: Optional[
     )
 
 
-def log_end(success: bool, steps: int, rewards: List[float]) -> None:
+def log_end(success: bool, steps: int, score: float, rewards: List[float]) -> None:
     rewards_str = ",".join(f"{r:.2f}" for r in rewards)
-    print(f"[END] success={str(success).lower()} steps={steps} rewards={rewards_str}", flush=True)
+    print(f"[END] success={str(success).lower()} steps={steps} score={score:.3f} rewards={rewards_str}", flush=True)
 
 
 SYSTEM_PROMPT = """You are an expert AI Safety researcher specializing in Mechanistic Interpretability of neural networks. You are interacting with a PyTorch sandbox environment that presents you with a 4-task curriculum.
@@ -115,10 +112,44 @@ def extract_json(text: str) -> Optional[dict]:
     return None
 
 
-async def call_llm_with_retry(client: OpenAI, messages: List[dict], model: str) -> str:
+def _import_env_classes():
+    """Import MechInterpEnv and MechInterpAction with multiple fallback paths."""
+    try:
+        from mech_interp import MechInterpEnv
+        from mech_interp.models import MechInterpAction
+        return MechInterpEnv, MechInterpAction
+    except (ImportError, ModuleNotFoundError):
+        pass
+
+    try:
+        from mech_interp.client import MechInterpEnv
+        from mech_interp.models import MechInterpAction
+        return MechInterpEnv, MechInterpAction
+    except (ImportError, ModuleNotFoundError):
+        pass
+
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    parent_dir = os.path.dirname(script_dir)
+    if parent_dir not in sys.path:
+        sys.path.insert(0, parent_dir)
+
+    try:
+        from mech_interp.client import MechInterpEnv
+        from mech_interp.models import MechInterpAction
+        return MechInterpEnv, MechInterpAction
+    except (ImportError, ModuleNotFoundError):
+        pass
+
+    raise ImportError(
+        "Could not import MechInterpEnv and MechInterpAction. "
+        "Ensure the package is installed or PYTHONPATH is set correctly."
+    )
+
+
+async def call_llm_with_retry(client, messages: List[dict], model: str) -> str:
     """Call LLM with exponential backoff retry logic."""
     last_error = None
-    
+
     for attempt in range(MAX_RETRIES):
         try:
             response = client.chat.completions.create(
@@ -133,7 +164,7 @@ async def call_llm_with_retry(client: OpenAI, messages: List[dict], model: str) 
             if attempt < MAX_RETRIES - 1:
                 wait_time = RETRY_DELAY * (2 ** attempt)
                 await asyncio.sleep(wait_time)
-    
+
     raise last_error
 
 
@@ -142,6 +173,7 @@ async def main() -> None:
     rewards: List[float] = []
     steps_taken = 0
     success = False
+    final_score = 0.0
     task_scores = {1: MIN_TASK_SCORE, 2: MIN_TASK_SCORE, 3: MIN_TASK_SCORE, 4: MIN_TASK_SCORE}
 
     log_start(task=TASK_NAME, env=BENCHMARK, model=MODEL_NAME)
@@ -151,20 +183,17 @@ async def main() -> None:
             raise RuntimeError("HF_TOKEN environment variable is required")
 
         client = OpenAI(base_url=API_BASE_URL, api_key=HF_TOKEN)
-
-        try:
-            from mech_interp import MechInterpAction, MechInterpEnv
-        except ModuleNotFoundError:
-            import sys
-
-            sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-            from client import MechInterpEnv
-            from models import MechInterpAction
+        MechInterpEnv, MechInterpAction = _import_env_classes()
 
         if LOCAL_IMAGE_NAME:
             env = await MechInterpEnv.from_docker_image(LOCAL_IMAGE_NAME)
-        else:
+        elif ENV_URL:
             env = MechInterpEnv(base_url=ENV_URL)
+        else:
+            raise RuntimeError(
+                "Either LOCAL_IMAGE_NAME or ENV_URL environment variable must be set. "
+                "Set ENV_URL to your Hugging Face Space URL (e.g., https://your-space.hf.space)."
+            )
 
         messages = [{"role": "system", "content": SYSTEM_PROMPT}]
         result = await env.reset()
@@ -222,13 +251,27 @@ async def main() -> None:
                     })
 
             prev_task = obs.task_level
-            result = await env.step(action)
-            obs = result.observation
-            reward = result.reward if result.reward is not None else MIN_TASK_SCORE
+            try:
+                result = await env.step(action)
+                obs = result.observation
+                reward = result.reward if result.reward is not None else MIN_TASK_SCORE
+            except Exception as e:
+                reward = MIN_TASK_SCORE
+                log_step(step, f"env_error: {e}", reward, True, str(e))
+                rewards.append(reward)
+                steps_taken = step
+                break
+
             rewards.append(reward)
             steps_taken = step
 
-            log_step(step, action_for_log if action_for_log != "invalid_json" else action_label, reward, obs.done, None)
+            log_step(
+                step,
+                action_for_log if action_for_log != "invalid_json" else action_label,
+                reward,
+                obs.done,
+                None,
+            )
 
             if action.solution_target is not None and reward > task_scores.get(prev_task, MIN_TASK_SCORE):
                 task_scores[prev_task] = reward
@@ -238,7 +281,7 @@ async def main() -> None:
 
                 task_change_note = ""
                 if obs.task_level != prev_task:
-                    task_change_note = f"\nYou advanced to Task {obs.task_level}! Read the new task description from the system prompt."
+                    task_change_note = f"\nYou advanced to Task {obs.task_level}! Read the new task description."
 
                 messages.append({
                     "role": "user",
@@ -253,18 +296,21 @@ async def main() -> None:
             if len(messages) > 22:
                 messages = [messages[0]] + messages[-20:]
 
-        success = (sum(task_scores.values()) / 4.0) > 0.9
+        final_score = sum(task_scores.values()) / 4.0
+        success = final_score > 0.9
 
     except Exception as e:
         log_step(steps_taken + 1, "fatal_error", MIN_TASK_SCORE, True, str(e))
         rewards.append(MIN_TASK_SCORE)
         steps_taken += 1
+        final_score = MIN_TASK_SCORE
 
     finally:
         if env is not None:
             await env.close()
-        log_end(success=success, steps=steps_taken, rewards=rewards)
+        log_end(success=success, steps=steps_taken, score=final_score, rewards=rewards)
 
 
 if __name__ == "__main__":
+    from openai import OpenAI
     asyncio.run(main())

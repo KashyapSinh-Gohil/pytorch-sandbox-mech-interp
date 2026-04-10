@@ -6,6 +6,5 @@
 
 """Mech Interp environment server components."""
 
-from .mech_interp_environment import MechInterpEnvironment
-
-__all__ = ["MechInterpEnvironment"]
+# Note: MechInterpEnvironment is imported directly by server/app.py
+# to avoid circular import issues. Do not import here.

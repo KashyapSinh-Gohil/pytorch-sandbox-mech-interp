@@ -21,19 +21,27 @@ except Exception as e:
     )
 
 try:
-    from ..models import MechInterpAction, MechInterpObservation
-    from .mech_interp_environment import (
-        MechInterpEnvironment,
-        get_task_catalog,
-        resolve_task_selection,
-    )
-except (ImportError, ModuleNotFoundError):
-    from models import MechInterpAction, MechInterpObservation
+    from mech_interp.models import MechInterpAction, MechInterpObservation
     from server.mech_interp_environment import (
         MechInterpEnvironment,
         get_task_catalog,
         resolve_task_selection,
     )
+except (ImportError, ModuleNotFoundError):
+    try:
+        from models import MechInterpAction, MechInterpObservation
+        from mech_interp_environment import (
+            MechInterpEnvironment,
+            get_task_catalog,
+            resolve_task_selection,
+        )
+    except (ImportError, ModuleNotFoundError):
+        from ..models import MechInterpAction, MechInterpObservation
+        from .mech_interp_environment import (
+            MechInterpEnvironment,
+            get_task_catalog,
+            resolve_task_selection,
+        )
 
 logger = logging.getLogger(__name__)
 

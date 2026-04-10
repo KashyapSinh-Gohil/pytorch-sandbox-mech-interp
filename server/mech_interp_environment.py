@@ -63,14 +63,27 @@ except Exception:
         def named_rubrics(self):
             return self.named_children()
 
-from . import model_architectures
-
-sys.modules.setdefault("model_architectures", model_architectures)
+import sys as _sys
 
 try:
-    from ..models import MechInterpAction, MechInterpObservation, InterpState
+    from server import model_architectures as _ma
 except ImportError:
-    from models import MechInterpAction, MechInterpObservation, InterpState
+    try:
+        from . import model_architectures as _ma
+    except ImportError:
+        import model_architectures as _ma
+
+_sys.modules.setdefault("model_architectures", _ma)
+_sys.modules.setdefault("server.model_architectures", _ma)
+model_architectures = _ma
+
+try:
+    from mech_interp.models import MechInterpAction, MechInterpObservation, InterpState
+except (ImportError, ModuleNotFoundError):
+    try:
+        from models import MechInterpAction, MechInterpObservation, InterpState
+    except (ImportError, ModuleNotFoundError):
+        from ..models import MechInterpAction, MechInterpObservation, InterpState
 
 EXEC_TIMEOUT = 30
 MAX_EPISODE_STEPS = 30
@@ -115,6 +128,7 @@ TASK_SPECS = {
         "level": 1,
         "name": "Dead Neuron Detection",
         "description": "Find all zero-weight input indices in the Linear(10,1) model.",
+        "difficulty": "easy",
         "grader_name": "dead_neuron_detection_grader",
         "grader_module": "tasks.task1.grader",
         "grader_function": "grade",
@@ -124,6 +138,7 @@ TASK_SPECS = {
         "level": 2,
         "name": "Causal Ablation",
         "description": "Identify the hidden neuron responsible for the multiplicative circuit.",
+        "difficulty": "medium",
         "grader_name": "causal_ablation_grader",
         "grader_module": "tasks.task2.grader",
         "grader_function": "grade",
@@ -133,6 +148,7 @@ TASK_SPECS = {
         "level": 3,
         "name": "Fourier Analysis",
         "description": "Recover the planted frequencies from the embedding spectrum.",
+        "difficulty": "hard",
         "grader_name": "fourier_frequency_recovery_grader",
         "grader_module": "tasks.task3.grader",
         "grader_function": "grade",
@@ -142,6 +158,7 @@ TASK_SPECS = {
         "level": 4,
         "name": "Additive Bypass Attribution",
         "description": "Identify the hidden neuron that directly carries the additive x3 bypass.",
+        "difficulty": "medium",
         "grader_name": "additive_bypass_attribution_grader",
         "grader_module": "tasks.task4.grader",
         "grader_function": "grade",
@@ -523,6 +540,7 @@ def get_task_catalog() -> list[dict[str, Any]]:
             "level": spec["level"],
             "name": spec["name"],
             "description": spec["description"],
+            "difficulty": spec.get("difficulty", "medium"),
             "has_grader": True,
             "reset_payload": {"task_id": spec["id"]},
             "grader": {

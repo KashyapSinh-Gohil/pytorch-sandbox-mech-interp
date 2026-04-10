@@ -5,54 +5,37 @@
 # LICENSE file in the root directory of this source tree.
 
 [build-system]
-requires = ["setuptools>=45", "wheel"]
+requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "openenv-mech_interp"
+name = "mech_interp"
 version = "0.1.0"
-description = "Mech Interp environment for OpenEnv"
+description = "PyTorchSandbox mechanistic interpretability benchmark for OpenEnv"
 requires-python = ">=3.10"
 dependencies = [
-    # Core OpenEnv runtime (provides FastAPI server + HTTP client types)
-    "openenv-core[core]>=0.2.2",
-    # Web framework and server
+    "openenv-core>=0.2.2",
     "fastapi>=0.115.0",
     "uvicorn>=0.24.0",
-    # Environment-specific dependencies
     "torch>=2.0.0",
     "pydantic>=2.0.0",
     "openai>=1.0.0",
     "gradio>=4.0.0",
+    "numpy>=1.24.0",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
     "pytest-cov>=4.0.0",
+    "httpx>=0.27.0",
 ]
 
 [project.scripts]
-# Server entry point - enables running via: python -m mech_interp.server.app
 server = "mech_interp.server.app:main"
 
-[tool.setuptools]
-include-package-data = true
-packages = [
-    "mech_interp",
-    "mech_interp.server",
-    "tasks",
-    "tasks.task1",
-    "tasks.task2",
-    "tasks.task3",
-    "tasks.task4",
-]
-
-[tool.setuptools.package-dir]
-"mech_interp" = "."
-"mech_interp.server" = "server"
-"tasks" = "tasks"
-"tasks.task1" = "tasks/task1"
-"tasks.task2" = "tasks/task2"
-"tasks.task3" = "tasks/task3"
-"tasks.task4" = "tasks/task4"
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["mech_interp*", "server*", "tasks*"]
+exclude = ["tests*", "docs*", "deep report*"]

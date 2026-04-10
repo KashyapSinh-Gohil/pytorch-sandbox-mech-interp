@@ -11,9 +11,9 @@ port: 8000
 action: MechInterpAction
 observation: MechInterpObservation
 state: InterpState
-action_type: models.MechInterpAction
-observation_type: models.MechInterpObservation
-state_type: models.InterpState
+action_type: mech_interp.models:MechInterpAction
+observation_type: mech_interp.models:MechInterpObservation
+state_type: mech_interp.models:InterpState
 max_episode_steps: 30
 environment: server.mech_interp_environment:MechInterpEnvironment
 tasks:
