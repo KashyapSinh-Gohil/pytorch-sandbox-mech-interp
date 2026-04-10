@@ -38,9 +38,9 @@ def log_step(step: int, action: str, reward: float, done: bool, error: Optional[
     )
 
 
-def log_end(success: bool, steps: int, score: float, rewards: List[float]) -> None:
+def log_end(success: bool, steps: int, rewards: List[float]) -> None:
     rewards_str = ",".join(f"{r:.2f}" for r in rewards)
-    print(f"[END] success={str(success).lower()} steps={steps} score={score:.3f} rewards={rewards_str}", flush=True)
+    print(f"[END] success={str(success).lower()} steps={steps} rewards={rewards_str}", flush=True)
 
 
 SYSTEM_PROMPT = """You are an expert AI Safety researcher specializing in Mechanistic Interpretability of neural networks. You are interacting with a PyTorch sandbox environment that presents you with a 4-task curriculum.
@@ -308,7 +308,7 @@ async def main() -> None:
     finally:
         if env is not None:
             await env.close()
-        log_end(success=success, steps=steps_taken, score=final_score, rewards=rewards)
+        log_end(success=success, steps=steps_taken, rewards=rewards)
 
 
 if __name__ == "__main__":
