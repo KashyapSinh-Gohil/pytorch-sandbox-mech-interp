@@ -16,7 +16,7 @@ class _FallbackAction(BaseModel):
     """Compatibility base used when tests monkeypatch OpenEnv with plain classes."""
 
     metadata: Dict[str, Any] = Field(default_factory=dict)
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="ignore")
 
 
 class _FallbackObservation(BaseModel):
@@ -46,7 +46,7 @@ class MechInterpAction(ActionBase):
 
     python_code: Optional[str] = Field(None, description="Python code to execute in the sandbox.")
     solution_target: Optional[List[Any]] = Field(None, description="Sorted list of integer indices/frequencies.")
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="ignore")
 
     @field_validator("solution_target", mode="before")
     @classmethod

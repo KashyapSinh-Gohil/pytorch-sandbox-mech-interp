@@ -61,6 +61,18 @@ def _get_http_task_selection() -> dict[str, Any]:
         return dict(_HTTP_TASK_SELECTION)
 
 
+def _selection_payload(selection: Optional[dict[str, Any]]) -> dict[str, Any]:
+    """Return only request-body-safe task selectors expected by reset/step handlers."""
+    if not selection:
+        return {}
+    payload: dict[str, Any] = {}
+    if "task_id" in selection:
+        payload["task_id"] = selection["task_id"]
+    if "task_level" in selection:
+        payload["task_level"] = selection["task_level"]
+    return payload
+
+
 def _extract_task_selection(data: Any) -> Optional[dict[str, Any]]:
     if not isinstance(data, dict):
         return None
@@ -104,7 +116,7 @@ class JSONStringParserMiddleware(BaseHTTPMiddleware):
                         or _selection_from_request(request)
                         or _get_http_task_selection()
                     )
-                    data.update(selection)
+                    data.update(_selection_payload(selection))
 
                 candidate_actions = [data]
                 if isinstance(data.get("action"), dict):
@@ -125,7 +137,7 @@ class JSONStringParserMiddleware(BaseHTTPMiddleware):
                             logger.warning("Failed to parse solution_target JSON string: %s", exc)
 
                 if selection is not None:
-                    data.update(selection)
+                    data.update(_selection_payload(selection))
                     _set_http_task_selection(selection)
 
                 updated_body = json.dumps(data).encode("utf-8")

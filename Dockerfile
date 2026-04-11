@@ -7,27 +7,27 @@ FROM python:3.11-slim
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 # Install uv
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh
-ENV PATH="/root/.local/bin:$PATH"
+RUN pip install --no-cache-dir uv && uv --version
 
 WORKDIR /app
 
 # Copy dependency files first for better caching
-COPY pyproject.toml server/requirements.txt ./
+COPY pyproject.toml uv.lock ./
 
-# Install torch CPU-only first (much smaller package ~200MB vs 800MB+)
-# This prevents uv from resolving to full torch with CUDA
-RUN uv pip install --system torch --index-url https://download.pytorch.org/whl/cpu && \
+# Install dependencies
+RUN uv pip install --system torch && \
     uv pip install --system openenv-core fastapi uvicorn pydantic openai gradio numpy
-
-# Copy application source
-COPY --chown=user:user . .
 
 # Create non-root user for HF Spaces
 RUN useradd -m -u 1000 user 2>/dev/null || true
+
+# Copy application source
+COPY . .
+RUN chown -R user:user /app
 
 # Environment variables
 ENV HOME=/home/user \
