@@ -28,13 +28,11 @@ RUN useradd -m -u 1000 user 2>/dev/null || true
 # Copy application source
 COPY . .
 RUN chown -R user:user /app
-RUN chmod 755 /etc/ssl/certs && chmod 644 /etc/ssl/certs/ca-certificates.crt
 
 # Environment variables
 ENV HOME=/home/user \
     PATH="/home/user/.local/bin:$PATH" \
     ENABLE_WEB_INTERFACE=true \
-    SSL_CERT_FILE=/usr/local/lib/python3.11/site-packages/certifi/cacert.pem \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 

@@ -62,6 +62,7 @@ def _get_http_task_selection() -> dict[str, Any]:
 
 
 def _selection_payload(selection: Optional[dict[str, Any]]) -> dict[str, Any]:
+    """Return only request-body-safe task selectors expected by reset/step handlers."""
     if not selection:
         return {}
     payload: dict[str, Any] = {}
